@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<XMLDB PATH="mod/smartworkbook/db" VERSION="2026070700100" COMMENT="AI Smart Workbook database schema">
+  <TABLES>
+
+    <TABLE NAME="smartworkbook" COMMENT="Main activity instance table">
+      <FIELDS>
+        <FIELD NAME="id"           TYPE="int"  LENGTH="10" NOTNULL="true"  SEQUENCE="true"/>
+        <FIELD NAME="course"       TYPE="int"  LENGTH="10" NOTNULL="true"  SEQUENCE="false"/>
+        <FIELD NAME="name"         TYPE="char" LENGTH="255" NOTNULL="true" SEQUENCE="false"/>
+        <FIELD NAME="intro"        TYPE="text"              NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="introformat"  TYPE="int"  LENGTH="4"  NOTNULL="true"  DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="grade"        TYPE="int"  LENGTH="10" NOTNULL="true"  DEFAULT="100" SEQUENCE="false"/>
+        <FIELD NAME="source_filename" TYPE="char" LENGTH="255" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="source_fileid"   TYPE="int"  LENGTH="10"  NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="status"       TYPE="char" LENGTH="20" NOTNULL="true"  DEFAULT="setup" SEQUENCE="false" COMMENT="setup|ready|published"/>
+        <FIELD NAME="model_answers_json" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="showstudentname"  TYPE="int"  LENGTH="1"  NOTNULL="true"  DEFAULT="0" SEQUENCE="false" COMMENT="Show student full name as read-only field at top of workbook"/>
+        <FIELD NAME="numgroupmembers"  TYPE="int"  LENGTH="3"  NOTNULL="true"  DEFAULT="0" SEQUENCE="false" COMMENT="Number of group member name slots (0=hidden, 1-6=shown)"/>
+        <FIELD NAME="manual_grading"  TYPE="int"  LENGTH="1"  NOTNULL="true"  DEFAULT="0" SEQUENCE="false" COMMENT="1=manual grading mode (teacher checklist, no AI credits); 0=AI grading mode"/>
+        <FIELD NAME="timecreated"  TYPE="int"  LENGTH="10" NOTNULL="true"  DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int"  LENGTH="10" NOTNULL="true"  DEFAULT="0" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="course" UNIQUE="false" FIELDS="course"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="smartworkbook_question" COMMENT="Questions parsed from the teacher workbook">
+      <FIELDS>
+        <FIELD NAME="id"           TYPE="int"  LENGTH="10" NOTNULL="true"  SEQUENCE="true"/>
+        <FIELD NAME="workbookid"   TYPE="int"  LENGTH="10" NOTNULL="true"  SEQUENCE="false"/>
+        <FIELD NAME="sortorder"    TYPE="int"  LENGTH="10" NOTNULL="true"  DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="qtype"        TYPE="char" LENGTH="20" NOTNULL="true"  DEFAULT="text" SEQUENCE="false" COMMENT="heading|text|short|long|yesno|rating|table"/>
+        <FIELD NAME="label"        TYPE="text"              NOTNULL="false" SEQUENCE="false" COMMENT="Question number or heading label"/>
+        <FIELD NAME="questiontext" TYPE="text"              NOTNULL="true"  SEQUENCE="false"/>
+        <FIELD NAME="marks"        TYPE="number" LENGTH="6" DECIMALS="2" NOTNULL="true" DEFAULT="1" SEQUENCE="false"/>
+        <FIELD NAME="model_answer" TYPE="text"              NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="rubric_notes" TYPE="text"              NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="table_cols"   TYPE="text"              NOTNULL="false" SEQUENCE="false" COMMENT="JSON column headers for table type"/>
+        <FIELD NAME="table_rows"   TYPE="int"  LENGTH="4"  NOTNULL="false" DEFAULT="3" SEQUENCE="false"/>
+        <FIELD NAME="timecreated"  TYPE="int"  LENGTH="10" NOTNULL="true"  DEFAULT="0" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="workbookid" TYPE="foreign" FIELDS="workbookid" REFTABLE="smartworkbook" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="workbook_order" UNIQUE="false" FIELDS="workbookid, sortorder"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="smartworkbook_response" COMMENT="Per-question student responses (auto-saved)">
+      <FIELDS>
+        <FIELD NAME="id"           TYPE="int"  LENGTH="10" NOTNULL="true"  SEQUENCE="true"/>
+        <FIELD NAME="workbookid"   TYPE="int"  LENGTH="10" NOTNULL="true"  SEQUENCE="false"/>
+        <FIELD NAME="questionid"   TYPE="int"  LENGTH="10" NOTNULL="true"  SEQUENCE="false"/>
+        <FIELD NAME="userid"       TYPE="int"  LENGTH="10" NOTNULL="true"  SEQUENCE="false"/>
+        <FIELD NAME="responsetext" TYPE="text"              NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="timecreated"  TYPE="int"  LENGTH="10" NOTNULL="true"  DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int"  LENGTH="10" NOTNULL="true"  DEFAULT="0" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="workbookid" TYPE="foreign" FIELDS="workbookid" REFTABLE="smartworkbook" REFFIELDS="id"/>
+        <KEY NAME="questionid" TYPE="foreign" FIELDS="questionid" REFTABLE="smartworkbook_question" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="q_user" UNIQUE="true" FIELDS="questionid, userid"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="smartworkbook_submission" COMMENT="Student submission records">
+      <FIELDS>
+        <FIELD NAME="id"           TYPE="int"  LENGTH="10" NOTNULL="true"  SEQUENCE="true"/>
+        <FIELD NAME="workbookid"   TYPE="int"  LENGTH="10" NOTNULL="true"  SEQUENCE="false"/>
+        <FIELD NAME="userid"       TYPE="int"  LENGTH="10" NOTNULL="true"  SEQUENCE="false"/>
+        <FIELD NAME="status"       TYPE="char" LENGTH="20" NOTNULL="true"  DEFAULT="draft" SEQUENCE="false" COMMENT="draft|submitted|ai_marked|grades_released"/>
+        <FIELD NAME="grade"        TYPE="number" LENGTH="10" DECIMALS="5"  NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="total_marks"  TYPE="number" LENGTH="10" DECIMALS="2"  NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="max_marks"    TYPE="number" LENGTH="10" DECIMALS="2"  NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="teacher_feedback" TYPE="text" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="graderid"     TYPE="int"  LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="timecreated"  TYPE="int"  LENGTH="10" NOTNULL="true"  DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int"  LENGTH="10" NOTNULL="true"  DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timesubmitted" TYPE="int" LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="timegraded"   TYPE="int"  LENGTH="10" NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="meta_json"    TYPE="text"              NOTNULL="false" SEQUENCE="false" COMMENT="Group member names and other per-submission metadata stored as JSON"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="workbookid" TYPE="foreign" FIELDS="workbookid" REFTABLE="smartworkbook" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="wb_user" UNIQUE="true" FIELDS="workbookid, userid"/>
+      </INDEXES>
+    </TABLE>
+
+    <TABLE NAME="smartworkbook_mark" COMMENT="Per-question marks (AI suggested + teacher approved)">
+      <FIELDS>
+        <FIELD NAME="id"           TYPE="int"  LENGTH="10" NOTNULL="true"  SEQUENCE="true"/>
+        <FIELD NAME="submissionid" TYPE="int"  LENGTH="10" NOTNULL="true"  SEQUENCE="false"/>
+        <FIELD NAME="questionid"   TYPE="int"  LENGTH="10" NOTNULL="true"  SEQUENCE="false"/>
+        <FIELD NAME="ai_mark"      TYPE="number" LENGTH="6" DECIMALS="2"   NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="ai_comment"   TYPE="text"              NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="ai_confidence" TYPE="char" LENGTH="10" NOTNULL="false" SEQUENCE="false" COMMENT="high|medium|low"/>
+        <FIELD NAME="teacher_mark" TYPE="number" LENGTH="6" DECIMALS="2"   NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="teacher_comment" TYPE="text"           NOTNULL="false" SEQUENCE="false"/>
+        <FIELD NAME="status"       TYPE="char" LENGTH="20" NOTNULL="true"  DEFAULT="pending" SEQUENCE="false" COMMENT="pending|ai_done|approved|overridden|reanswer"/>
+        <FIELD NAME="timecreated"  TYPE="int"  LENGTH="10" NOTNULL="true"  DEFAULT="0" SEQUENCE="false"/>
+        <FIELD NAME="timemodified" TYPE="int"  LENGTH="10" NOTNULL="true"  DEFAULT="0" SEQUENCE="false"/>
+      </FIELDS>
+      <KEYS>
+        <KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+        <KEY NAME="submissionid" TYPE="foreign" FIELDS="submissionid" REFTABLE="smartworkbook_submission" REFFIELDS="id"/>
+        <KEY NAME="questionid" TYPE="foreign" FIELDS="questionid" REFTABLE="smartworkbook_question" REFFIELDS="id"/>
+      </KEYS>
+      <INDEXES>
+        <INDEX NAME="sub_q" UNIQUE="true" FIELDS="submissionid, questionid"/>
+      </INDEXES>
+    </TABLE>
+
+  </TABLES>
+</XMLDB>
