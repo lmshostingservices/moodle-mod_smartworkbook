@@ -1,4 +1,19 @@
 <?php
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+
 /**
  * AI Smart Workbook - Teacher dashboard.
  *
@@ -75,7 +90,7 @@ $PAGE->requires->css('/mod/smartworkbook/styles.css');
 
 $questions  = $DB->get_records('smartworkbook_question', ['workbookid' => $workbook->id], 'sortorder ASC');
 $q_count    = count($questions);
-$total_marks = array_sum(array_map(function($q){ return (float)$q->marks; }, $questions));
+$total_marks = array_sum(array_map(function ($q){ return (float)$q->marks; }, $questions));
 
 $status_label = [
     'setup'     => get_string('status_setup', 'smartworkbook'),
@@ -1027,7 +1042,7 @@ echo $OUTPUT->header();
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     var CMID          = <?php echo (int)$cm->id; ?>;
     var WB_SESS       = '<?php echo sesskey(); ?>';
     var AJAX_URL      = '<?php echo (new moodle_url('/mod/smartworkbook/ajax.php'))->out(false); ?>';
@@ -1040,7 +1055,7 @@ document.addEventListener('DOMContentLoaded', function() {
             method: 'POST',
             headers: {'Content-Type': 'application/x-www-form-urlencoded'},
             body: new URLSearchParams(params)
-        }).then(function(r){ return r.json(); }).then(cb).catch(function(e){ cb({success:false,error:e.message}); });
+        }).then(function (r){ return r.json(); }).then(cb).catch(function (e){ cb({success:false,error:e.message}); });
     }
 
     // ---- Load submissions ----
@@ -1053,7 +1068,7 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     function loadSubmissions() {
-        ajax({action:'get_submissions', cmid:CMID}, function(data) {
+        ajax({action:'get_submissions', cmid:CMID}, function (data) {
             var tbody   = document.getElementById('sw-sub-tbody');
             var countEl = document.getElementById('sw-sub-count');
             var statSub = document.getElementById('sw-stat-submissions');
@@ -1068,13 +1083,13 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             var total    = data.submissions.length;
-            var awaiting = data.submissions.filter(function(s){ return s.status === 'submitted'; }).length;
+            var awaiting = data.submissions.filter(function (s){ return s.status === 'submitted'; }).length;
             if (countEl)  countEl.textContent  = total + ' student' + (total !== 1 ? 's' : '');
             if (statSub)  statSub.textContent   = total;
             if (statAwt)  statAwt.textContent   = awaiting;
 
             tbody.innerHTML = '';
-            data.submissions.forEach(function(s) {
+            data.submissions.forEach(function (s) {
                 var score = (s.totalmarks !== null && s.maxmarks !== null)
                     ? (parseFloat(s.totalmarks).toFixed(1) + ' / ' + parseFloat(s.maxmarks).toFixed(1))
                     : '&mdash;';
@@ -1104,17 +1119,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 tbody.appendChild(tr);
             });
             // Bind events
-            tbody.querySelectorAll('.sw-open-console').forEach(function(btn) {
-                btn.addEventListener('click', function() { openConsole(btn.dataset.sid, btn.dataset.name); });
+            tbody.querySelectorAll('.sw-open-console').forEach(function (btn) {
+                btn.addEventListener('click', function () { openConsole(btn.dataset.sid, btn.dataset.name); });
             });
-            tbody.querySelectorAll('.sw-open-manual').forEach(function(btn) {
-                btn.addEventListener('click', function() { openManualConsole(btn.dataset.sid, btn.dataset.name); });
+            tbody.querySelectorAll('.sw-open-manual').forEach(function (btn) {
+                btn.addEventListener('click', function () { openManualConsole(btn.dataset.sid, btn.dataset.name); });
             });
-            tbody.querySelectorAll('.sw-ai-mark-one').forEach(function(btn) {
-                btn.addEventListener('click', function() { aiMarkOne(btn.dataset.sid, btn); });
+            tbody.querySelectorAll('.sw-ai-mark-one').forEach(function (btn) {
+                btn.addEventListener('click', function () { aiMarkOne(btn.dataset.sid, btn); });
             });
-            tbody.querySelectorAll('.sw-release-one').forEach(function(btn) {
-                btn.addEventListener('click', function() { releaseOne(btn.dataset.sid, btn); });
+            tbody.querySelectorAll('.sw-release-one').forEach(function (btn) {
+                btn.addEventListener('click', function () { releaseOne(btn.dataset.sid, btn); });
             });
         });
     }
@@ -1122,7 +1137,7 @@ document.addEventListener('DOMContentLoaded', function() {
     loadSubmissions();
 
     // ---- How-to quick start card ----
-    (function() {
+    (function () {
         var card      = document.getElementById('sw-howto-card');
         var body      = document.getElementById('sw-howto-body');
         var toggle    = document.getElementById('sw-howto-toggle');
@@ -1151,7 +1166,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         } catch(e) {}
 
-        toggle.addEventListener('click', function(e) {
+        toggle.addEventListener('click', function (e) {
             if (e.target === dismissBtn) return; // handled separately
             if (body.classList.contains('sw-howto-body-hidden')) {
                 expand();
@@ -1159,7 +1174,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 collapse();
             }
         });
-        toggle.addEventListener('keydown', function(e) {
+        toggle.addEventListener('keydown', function (e) {
             if (e.keyCode === 13 || e.keyCode === 32) {
                 e.preventDefault();
                 toggle.click();
@@ -1167,7 +1182,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         if (dismissBtn) {
-            dismissBtn.addEventListener('click', function(e) {
+            dismissBtn.addEventListener('click', function (e) {
                 e.stopPropagation();
                 try { localStorage.setItem(lsKey, '1'); } catch(ex) {}
                 card.style.display = 'none';
@@ -1205,22 +1220,22 @@ document.addEventListener('DOMContentLoaded', function() {
         convertBtn.style.display = '';
     }
 
-    fileInput.addEventListener('change', function() {
+    fileInput.addEventListener('change', function () {
         if (fileInput.files.length === 0) return;
         showFileChosen(fileInput.files[0]);
     });
 
     if (dropZone) {
-        dropZone.addEventListener('dragover', function(e) {
+        dropZone.addEventListener('dragover', function (e) {
             e.preventDefault();
             dropZone.classList.add('sw-drag-over');
         });
-        dropZone.addEventListener('dragleave', function(e) {
+        dropZone.addEventListener('dragleave', function (e) {
             if (!dropZone.contains(e.relatedTarget)) {
                 dropZone.classList.remove('sw-drag-over');
             }
         });
-        dropZone.addEventListener('drop', function(e) {
+        dropZone.addEventListener('drop', function (e) {
             e.preventDefault();
             dropZone.classList.remove('sw-drag-over');
             var files = e.dataTransfer && e.dataTransfer.files;
@@ -1231,7 +1246,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     if (convertBtn) {
-        convertBtn.addEventListener('click', function() {
+        convertBtn.addEventListener('click', function () {
             if (!chosenFile) return;
             var ext = chosenFile.name.split('.').pop().toLowerCase();
             if (ext !== 'docx' && ext !== 'pdf') {
@@ -1247,7 +1262,7 @@ document.addEventListener('DOMContentLoaded', function() {
             progressBar.style.width = '10%';
 
             var reader = new FileReader();
-            reader.onload = function(e) {
+            reader.onload = function (e) {
                 progressLbl.textContent = 'Sending to AI...';
                 progressBar.style.width = '30%';
 
@@ -1272,12 +1287,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 progressLbl.textContent = 'AI is analysing your workbook...';
 
                 fetch(AJAX_URL, {method:'POST', body: new URLSearchParams(Object.fromEntries(form.entries()))})
-                    .then(function(r){ return r.json(); })
-                    .then(function(data) {
+                    .then(function (r){ return r.json(); })
+                    .then(function (data) {
                         progressBar.style.width = '100%';
                         if (data.success) {
                             progressLbl.textContent = data.count + ' questions detected. Reloading...';
-                            setTimeout(function(){ window.location.reload(); }, 1200);
+                            setTimeout(function (){ window.location.reload(); }, 1200);
                         } else {
                             progressLbl.textContent = 'Error: ' + (data.error || 'Conversion failed.');
                             progressBar.style.background = '#ef4444';
@@ -1293,16 +1308,16 @@ document.addEventListener('DOMContentLoaded', function() {
     // ---- Generate model answers ----
     var genBtn = document.getElementById('sw-gen-answers-btn');
     if (genBtn) {
-        genBtn.addEventListener('click', function() {
+        genBtn.addEventListener('click', function () {
             if (!confirm('Generate model answers for all questions? This uses 3 credits.')) return;
             genBtn.disabled = true;
             genBtn.innerHTML = '<span class="sw-spinner sw-spinner-dark"></span> Generating...';
-            ajax({action:'generate_model_answers', cmid:CMID}, function(data) {
+            ajax({action:'generate_model_answers', cmid:CMID}, function (data) {
                 genBtn.disabled = false;
                 genBtn.textContent = 'Generate Model Answers';
                 if (data.success) {
                     genBtn.textContent = data.count + ' answers generated. Reloading...';
-                    setTimeout(function(){ window.location.reload(); }, 800);
+                    setTimeout(function (){ window.location.reload(); }, 800);
                 } else {
                     alert('Error: ' + (data.error || 'Generation failed.'));
                 }
@@ -1311,12 +1326,12 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // ---- Drag-to-reorder ----
-    (function() {
+    (function () {
         var list = document.getElementById('sw-q-list');
         if (!list) return;
         var dragging = null;
 
-        list.addEventListener('dragstart', function(e) {
+        list.addEventListener('dragstart', function (e) {
             var li = e.target.closest('li.sw-q-item');
             if (!li) return;
             dragging = li;
@@ -1324,21 +1339,21 @@ document.addEventListener('DOMContentLoaded', function() {
             e.dataTransfer.effectAllowed = 'move';
         });
 
-        list.addEventListener('dragend', function() {
+        list.addEventListener('dragend', function () {
             if (dragging) dragging.classList.remove('sw-q-dragging');
             dragging = null;
-            list.querySelectorAll('.sw-q-drop-over').forEach(function(el) {
+            list.querySelectorAll('.sw-q-drop-over').forEach(function (el) {
                 el.classList.remove('sw-q-drop-over');
             });
             renumberItems();
         });
 
-        list.addEventListener('dragover', function(e) {
+        list.addEventListener('dragover', function (e) {
             e.preventDefault();
             e.dataTransfer.dropEffect = 'move';
             var target = e.target.closest('li.sw-q-item');
             if (!target || target === dragging) return;
-            list.querySelectorAll('.sw-q-drop-over').forEach(function(el) {
+            list.querySelectorAll('.sw-q-drop-over').forEach(function (el) {
                 el.classList.remove('sw-q-drop-over');
             });
             target.classList.add('sw-q-drop-over');
@@ -1351,18 +1366,18 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
 
-        list.addEventListener('dragleave', function(e) {
+        list.addEventListener('dragleave', function (e) {
             var target = e.target.closest('li.sw-q-item');
             if (target) target.classList.remove('sw-q-drop-over');
         });
 
-        list.addEventListener('drop', function(e) {
+        list.addEventListener('drop', function (e) {
             e.preventDefault();
         });
 
         function renumberItems() {
             var qn = 0;
-            list.querySelectorAll('.sw-q-item').forEach(function(li) {
+            list.querySelectorAll('.sw-q-item').forEach(function (li) {
                 var badge = li.querySelector('.sw-q-item-num');
                 if (!badge) return;
                 var sel = li.querySelector('.sw-q-type-select');
@@ -1383,7 +1398,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         // Re-number when type changes too
-        list.addEventListener('change', function(e) {
+        list.addEventListener('change', function (e) {
             if (e.target.classList.contains('sw-q-type-select')) {
                 var li = e.target.closest('li.sw-q-item');
                 if (li) li.dataset.qtype = e.target.value;
@@ -1393,10 +1408,10 @@ document.addEventListener('DOMContentLoaded', function() {
     })();
 
     // ---- Delete question ----
-    (function() {
+    (function () {
         var list = document.getElementById('sw-q-list');
         if (!list) return;
-        list.addEventListener('click', function(e) {
+        list.addEventListener('click', function (e) {
             var btn = e.target.closest('.sw-q-delete-btn');
             if (!btn) return;
             var li  = btn.closest('li.sw-q-item');
@@ -1404,15 +1419,15 @@ document.addEventListener('DOMContentLoaded', function() {
             var qid = btn.dataset.qid;
             if (!confirm('Delete this row? This cannot be undone.')) return;
             btn.disabled = true;
-            ajax({action:'delete_question', cmid:CMID, qid:qid}, function(data) {
+            ajax({action:'delete_question', cmid:CMID, qid:qid}, function (data) {
                 if (data.success) {
                     li.style.transition = 'opacity 0.2s';
                     li.style.opacity = '0';
-                    setTimeout(function() {
+                    setTimeout(function () {
                         li.parentNode && li.parentNode.removeChild(li);
                         // renumber — matches renumberItems() logic above
                         var qn = 0;
-                        document.querySelectorAll('#sw-q-list .sw-q-item').forEach(function(row) {
+                        document.querySelectorAll('#sw-q-list .sw-q-item').forEach(function (row) {
                             var badge = row.querySelector('.sw-q-item-num');
                             if (!badge) return;
                             var sel  = row.querySelector('.sw-q-type-select');
@@ -1435,10 +1450,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // ---- Add Question button ----
     var addQBtn = document.getElementById('sw-add-question-btn');
     if (addQBtn) {
-        addQBtn.addEventListener('click', function() {
+        addQBtn.addEventListener('click', function () {
             addQBtn.disabled = true;
             addQBtn.textContent = 'Adding...';
-            ajax({action: 'add_question', cmid: CMID}, function(data) {
+            ajax({action: 'add_question', cmid: CMID}, function (data) {
                 if (data.success) {
                     window.location.reload();
                 } else {
@@ -1453,10 +1468,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // ---- Save questions (text, type, label, marks, model answer, rubric, order) ----
     var saveQBtn = document.getElementById('sw-save-questions-btn');
     if (saveQBtn) {
-        saveQBtn.addEventListener('click', function() {
+        saveQBtn.addEventListener('click', function () {
             var items = document.querySelectorAll('#sw-q-list .sw-q-item');
             var questions = [];
-            items.forEach(function(item) {
+            items.forEach(function (item) {
                 var qid        = item.dataset.qid;
                 var typeSelect = item.querySelector('.sw-q-type-select');
                 var labelInput = item.querySelector('.sw-q-label-input');
@@ -1495,24 +1510,24 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             saveQBtn.disabled = true;
             saveQBtn.innerHTML = '<span class="sw-spinner sw-spinner-dark"></span> Saving...';
-            ajax({action:'save_questions', cmid:CMID, questions:JSON.stringify(questions)}, function(data) {
+            ajax({action:'save_questions', cmid:CMID, questions:JSON.stringify(questions)}, function (data) {
                 saveQBtn.disabled = false;
                 saveQBtn.textContent = data.success ? 'Saved!' : 'Save Failed';
-                setTimeout(function(){ saveQBtn.textContent = 'Save Changes'; }, 2000);
+                setTimeout(function (){ saveQBtn.textContent = 'Save Changes'; }, 2000);
             });
         });
     }
 
     // ---- RTE toolbar binding (question text contenteditable) ----
-    (function() {
+    (function () {
         function bindRteToolbar(wrap) {
             var editor  = wrap.querySelector('.sw-q-rte-editor');
             var toolbar = wrap.querySelector('.sw-rte-toolbar');
             if (!editor || !toolbar) { return; }
 
             // Toolbar button clicks — preventDefault keeps focus in editor.
-            toolbar.querySelectorAll('.sw-rte-btn[data-cmd]').forEach(function(btn) {
-                btn.addEventListener('mousedown', function(e) {
+            toolbar.querySelectorAll('.sw-rte-btn[data-cmd]').forEach(function (btn) {
+                btn.addEventListener('mousedown', function (e) {
                     e.preventDefault();
                     var cmd = btn.dataset.cmd;
                     var val = btn.dataset.val || null;
@@ -1524,17 +1539,17 @@ document.addEventListener('DOMContentLoaded', function() {
             // Colour picker — fires on input so live preview works.
             var colorInput = toolbar.querySelector('.sw-rte-color-input');
             if (colorInput) {
-                colorInput.addEventListener('input', function() {
+                colorInput.addEventListener('input', function () {
                     document.execCommand('foreColor', false, colorInput.value);
                     editor.focus();
                 });
             }
 
             // Focus styling — add/remove class on the wrapper.
-            editor.addEventListener('focus', function() {
+            editor.addEventListener('focus', function () {
                 wrap.classList.add('sw-rte-focused');
             });
-            editor.addEventListener('blur', function(e) {
+            editor.addEventListener('blur', function (e) {
                 // Don't remove focus class when the user clicks a toolbar button.
                 if (toolbar.contains(e.relatedTarget)) { return; }
                 wrap.classList.remove('sw-rte-focused');
@@ -1556,11 +1571,11 @@ document.addEventListener('DOMContentLoaded', function() {
     })();
 
     // ---- Image zone: paste, drag-drop, file upload ----
-    (function() {
+    (function () {
         function loadImageFile(file, imgZone) {
             if (!file || !file.type.match(/^image\//)) { return; }
             var reader = new FileReader();
-            reader.onload = function(e) {
+            reader.onload = function (e) {
                 var dataUri = e.target.result;
                 var preview = imgZone.querySelector('.sw-img-preview');
                 var hidden  = imgZone.querySelector('.sw-img-data-input');
@@ -1578,7 +1593,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Paste from clipboard (must click area first to focus it)
             if (pasteArea) {
-                pasteArea.addEventListener('paste', function(e) {
+                pasteArea.addEventListener('paste', function (e) {
                     var items = (e.clipboardData || e.originalEvent.clipboardData).items;
                     for (var i = 0; i < items.length; i++) {
                         if (items[i].kind === 'file') {
@@ -1589,8 +1604,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 });
                 // Global paste fires when pasteArea is focused
-                pasteArea.addEventListener('dragover', function(e) { e.preventDefault(); });
-                pasteArea.addEventListener('drop', function(e) {
+                pasteArea.addEventListener('dragover', function (e) { e.preventDefault(); });
+                pasteArea.addEventListener('drop', function (e) {
                     e.preventDefault();
                     var files = e.dataTransfer.files;
                     if (files.length) { loadImageFile(files[0], zone); }
@@ -1599,7 +1614,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // File picker
             if (fileInput) {
-                fileInput.addEventListener('change', function() {
+                fileInput.addEventListener('change', function () {
                     if (fileInput.files.length) { loadImageFile(fileInput.files[0], zone); }
                 });
             }
@@ -1609,7 +1624,7 @@ document.addEventListener('DOMContentLoaded', function() {
     })();
 
     // ---- Video zone: YouTube URL + live preview ----
-    (function() {
+    (function () {
         function ytIdFromUrl(url) {
             var m = url.match(/(?:youtube\.com\/(?:watch\?(?:[^&\s]*&)*v=|embed\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_\-]{11})/);
             return m ? m[1] : null;
@@ -1620,7 +1635,7 @@ document.addEventListener('DOMContentLoaded', function() {
             var preview = zone.querySelector('.sw-video-preview');
             if (!input || !preview) { return; }
 
-            input.addEventListener('input', function() {
+            input.addEventListener('input', function () {
                 var vid = ytIdFromUrl(input.value.trim());
                 if (vid) {
                     preview.innerHTML =
@@ -1637,7 +1652,7 @@ document.addEventListener('DOMContentLoaded', function() {
     })();
 
     // ---- Structured Table Builder ----
-    (function() {
+    (function () {
         var DEFAULT_HDR_BG = '#334155';
 
         function escH(s) {
@@ -1705,20 +1720,20 @@ document.addEventListener('DOMContentLoaded', function() {
             teWrap.innerHTML = html;
 
             // Bind header inputs
-            teWrap.querySelectorAll('.sw-te-hdr-inp').forEach(function(inp) {
-                inp.addEventListener('input', function() {
+            teWrap.querySelectorAll('.sw-te-hdr-inp').forEach(function (inp) {
+                inp.addEventListener('input', function () {
                     tbl.headers[parseInt(inp.dataset.col, 10)] = inp.value;
                 });
             });
             // Bind cell inputs
-            teWrap.querySelectorAll('.sw-te-cell-inp').forEach(function(inp) {
-                inp.addEventListener('input', function() {
+            teWrap.querySelectorAll('.sw-te-cell-inp').forEach(function (inp) {
+                inp.addEventListener('input', function () {
                     tbl.rows[parseInt(inp.dataset.row, 10)][parseInt(inp.dataset.col, 10)].v = inp.value;
                 });
             });
             // Toggle lock/edit
-            teWrap.querySelectorAll('.sw-te-toggle-btn').forEach(function(btn) {
-                btn.addEventListener('click', function() {
+            teWrap.querySelectorAll('.sw-te-toggle-btn').forEach(function (btn) {
+                btn.addEventListener('click', function () {
                     var r = parseInt(btn.dataset.row, 10);
                     var c = parseInt(btn.dataset.col, 10);
                     tbl.rows[r][c].e = !tbl.rows[r][c].e;
@@ -1726,8 +1741,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 });
             });
             // Delete row
-            teWrap.querySelectorAll('.sw-te-del-row-btn').forEach(function(btn) {
-                btn.addEventListener('click', function() {
+            teWrap.querySelectorAll('.sw-te-del-row-btn').forEach(function (btn) {
+                btn.addEventListener('click', function () {
                     tbl.rows.splice(parseInt(btn.dataset.row, 10), 1);
                     renderGrid(questionItem);
                 });
@@ -1756,9 +1771,9 @@ document.addEventListener('DOMContentLoaded', function() {
             var colorInp = questionItem.querySelector('.sw-te-hdr-color');
             if (colorInp) {
                 colorInp.value = tbl.header_bg || DEFAULT_HDR_BG;
-                colorInp.addEventListener('input', function() {
+                colorInp.addEventListener('input', function () {
                     tbl.header_bg = colorInp.value;
-                    teWrap.querySelectorAll('.sw-te-th, .sw-te-corner').forEach(function(el) {
+                    teWrap.querySelectorAll('.sw-te-th, .sw-te-corner').forEach(function (el) {
                         el.style.background = colorInp.value;
                     });
                 });
@@ -1767,23 +1782,23 @@ document.addEventListener('DOMContentLoaded', function() {
             // Control buttons (add/del row/col)
             var controls = questionItem.querySelector('.sw-te-controls');
             if (controls) {
-                controls.addEventListener('click', function(e) {
+                controls.addEventListener('click', function (e) {
                     var btn = e.target.closest('[data-action]');
                     if (!btn) { return; }
                     var action = btn.dataset.action;
                     if (action === 'add-row') {
-                        tbl.rows.push(tbl.headers.map(function(_, ci) { return {v: '', e: ci > 0}; }));
+                        tbl.rows.push(tbl.headers.map(function (_, ci) { return {v: '', e: ci > 0}; }));
                         renderGrid(questionItem);
                     } else if (action === 'del-row') {
                         if (tbl.rows.length > 1) { tbl.rows.pop(); renderGrid(questionItem); }
                     } else if (action === 'add-col') {
                         tbl.headers.push('Column ' + (tbl.headers.length + 1));
-                        tbl.rows.forEach(function(row) { row.push({v: '', e: true}); });
+                        tbl.rows.forEach(function (row) { row.push({v: '', e: true}); });
                         renderGrid(questionItem);
                     } else if (action === 'del-col') {
                         if (tbl.headers.length > 1) {
                             tbl.headers.pop();
-                            tbl.rows.forEach(function(row) { row.pop(); });
+                            tbl.rows.forEach(function (row) { row.pop(); });
                             renderGrid(questionItem);
                         }
                     }
@@ -1853,7 +1868,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         // Init existing table-type questions on page load.
-        document.querySelectorAll('#sw-q-list .sw-q-item').forEach(function(item) {
+        document.querySelectorAll('#sw-q-list .sw-q-item').forEach(function (item) {
             var typeSelect = item.querySelector('.sw-q-type-select');
             if (typeSelect && typeSelect.value === 'table') {
                 initTableEditor(item);
@@ -1863,7 +1878,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Listen for qtype dropdown changes.
         var qList = document.getElementById('sw-q-list');
         if (qList) {
-            qList.addEventListener('change', function(e) {
+            qList.addEventListener('change', function (e) {
                 if (!e.target.classList.contains('sw-q-type-select')) { return; }
                 var item = e.target.closest('.sw-q-item');
                 if (item) { applyQtype(item, e.target.value); }
@@ -1877,10 +1892,10 @@ document.addEventListener('DOMContentLoaded', function() {
     var unpublishBtn = document.getElementById('sw-unpublish-btn');
 
     if (publishBtn) {
-        publishBtn.addEventListener('click', function() {
+        publishBtn.addEventListener('click', function () {
             if (!confirm('Publish this workbook? Students will be able to access and submit answers.')) return;
             publishBtn.disabled = true;
-            ajax({action:'set_status', cmid:CMID, status:'published'}, function(data) {
+            ajax({action:'set_status', cmid:CMID, status:'published'}, function (data) {
                 if (data.success) {
                     window.location.reload();
                 } else {
@@ -1891,10 +1906,10 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     if (unpublishBtn) {
-        unpublishBtn.addEventListener('click', function() {
+        unpublishBtn.addEventListener('click', function () {
             if (!confirm('Unpublish? Students will no longer be able to access this workbook.')) return;
             unpublishBtn.disabled = true;
-            ajax({action:'set_status', cmid:CMID, status:'ready'}, function(data) {
+            ajax({action:'set_status', cmid:CMID, status:'ready'}, function (data) {
                 if (data.success) {
                     window.location.reload();
                 } else {
@@ -1908,10 +1923,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // ---- AI mark all ----
     var aiMarkAllBtn = document.getElementById('sw-ai-mark-all-btn');
     if (aiMarkAllBtn) {
-        aiMarkAllBtn.addEventListener('click', function() {
-            ajax({action:'get_submissions', cmid:CMID}, function(data) {
+        aiMarkAllBtn.addEventListener('click', function () {
+            ajax({action:'get_submissions', cmid:CMID}, function (data) {
                 if (!data.success) return;
-                var submitted = data.submissions.filter(function(s){ return s.status === 'submitted'; });
+                var submitted = data.submissions.filter(function (s){ return s.status === 'submitted'; });
                 if (submitted.length === 0) { alert('No submitted workbooks to mark.'); return; }
                 if (!confirm('AI mark ' + submitted.length + ' submissions? This uses ' + (submitted.length * 5) + ' credits.')) return;
                 aiMarkAllBtn.disabled = true;
@@ -1924,7 +1939,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         loadSubmissions();
                         return;
                     }
-                    ajax({action:'ai_mark', cmid:CMID, submissionid:submitted[i].id}, function() {
+                    ajax({action:'ai_mark', cmid:CMID, submissionid:submitted[i].id}, function () {
                         done++;
                         aiMarkAllBtn.innerHTML = '<span class="sw-spinner"></span> Marked ' + done + '/' + submitted.length;
                         markNext(i + 1);
@@ -1941,7 +1956,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var orig = btn.innerHTML;
         btn.disabled = true;
         btn.innerHTML = '<span class="sw-spinner"></span>';
-        ajax({action:'ai_mark', cmid:CMID, submissionid:sid}, function(data) {
+        ajax({action:'ai_mark', cmid:CMID, submissionid:sid}, function (data) {
             btn.disabled = false;
             btn.innerHTML = orig;
             if (data.success) {
@@ -1956,7 +1971,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function releaseOne(sid, btn) {
         if (!confirm('Release grades to this student? They will see their marks and feedback.')) return;
         btn.disabled = true;
-        ajax({action:'release_grades', cmid:CMID, submissionid:sid}, function(data) {
+        ajax({action:'release_grades', cmid:CMID, submissionid:sid}, function (data) {
             btn.disabled = false;
             if (data.success) {
                 loadSubmissions();
@@ -1976,12 +1991,12 @@ document.addEventListener('DOMContentLoaded', function() {
     var releaseBtn    = document.getElementById('sw-console-release-btn');
     var currentSid    = null;
 
-    closeBtn.addEventListener('click', function() {
+    closeBtn.addEventListener('click', function () {
         overlay.style.display = 'none';
         loadSubmissions();
     });
 
-    overlay.addEventListener('click', function(e) {
+    overlay.addEventListener('click', function (e) {
         if (e.target === overlay) { overlay.style.display = 'none'; loadSubmissions(); }
     });
 
@@ -1990,7 +2005,7 @@ document.addEventListener('DOMContentLoaded', function() {
         studentName.textContent = 'Student: ' + name;
         overlay.style.display = 'block';
         qContainer.innerHTML = '<div style="text-align:center;padding:30px;color:#9ca3af;">Loading...</div>';
-        ajax({action:'get_marks', cmid:CMID, submissionid:sid}, function(data) {
+        ajax({action:'get_marks', cmid:CMID, submissionid:sid}, function (data) {
             if (!data.success) {
                 qContainer.innerHTML = '<div style="color:#ef4444;padding:20px;">Failed to load: ' + (data.error||'unknown') + '</div>';
                 return;
@@ -2005,7 +2020,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             var html = '';
-            data.questions.forEach(function(q) {
+            data.questions.forEach(function (q) {
                 if (q.qtype === 'heading') return;
                 var aiMark = q.ai_mark !== null ? q.ai_mark : '';
                 var tMark  = q.teacher_mark !== null ? q.teacher_mark : (aiMark !== '' ? aiMark : '');
@@ -2044,8 +2059,8 @@ document.addEventListener('DOMContentLoaded', function() {
             qContainer.innerHTML = html || '<p style="color:#9ca3af;">No markable questions.</p>';
 
             // Bind save mark
-            qContainer.querySelectorAll('.sw-save-mark-btn').forEach(function(btn) {
-                btn.addEventListener('click', function() {
+            qContainer.querySelectorAll('.sw-save-mark-btn').forEach(function (btn) {
+                btn.addEventListener('click', function () {
                     var qid     = btn.dataset.qid;
                     var markEl  = qContainer.querySelector('.sw-mark-input[data-qid="' + qid + '"]');
                     var commEl  = qContainer.querySelector('.sw-comment-input[data-qid="' + qid + '"]');
@@ -2056,12 +2071,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         action: 'save_mark', cmid: CMID, submissionid: currentSid,
                         questionid: qid, mark: markEl.value,
                         comment: commEl.value, mark_status: statEl.value
-                    }, function(data) {
+                    }, function (data) {
                         btn.disabled = false;
                         if (data.success) {
                             btn.textContent = 'Saved';
                             totalsDisplay.textContent = parseFloat(data.total_earned).toFixed(1) + ' / ' + parseFloat(data.total_max).toFixed(1);
-                            setTimeout(function(){ btn.innerHTML = orig; }, 1500);
+                            setTimeout(function (){ btn.innerHTML = orig; }, 1500);
                         } else {
                             btn.innerHTML = orig;
                             alert('Save failed: ' + (data.error||'unknown'));
@@ -2075,11 +2090,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Console: request re-answer
     var resetBtn = document.getElementById('sw-console-reset-btn');
     if (resetBtn) {
-        resetBtn.addEventListener('click', function() {
+        resetBtn.addEventListener('click', function () {
             if (!currentSid) return;
             if (!confirm('Send this workbook back to the student for re-answering?\n\nOnly questions you flagged as "Needs re-answer" will be unlocked. The student will be notified and must resubmit.')) return;
             resetBtn.disabled = true;
-            ajax({action:'reset_submission', cmid:CMID, submissionid:currentSid}, function(data) {
+            ajax({action:'reset_submission', cmid:CMID, submissionid:currentSid}, function (data) {
                 resetBtn.disabled = false;
                 if (data.success) {
                     overlay.style.display = 'none';
@@ -2094,12 +2109,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Console: AI mark this
     if (aiMarkConsBtn) {
-        aiMarkConsBtn.addEventListener('click', function() {
+        aiMarkConsBtn.addEventListener('click', function () {
             if (!currentSid) return;
             if (!confirm('AI mark this submission? 5 credits will be deducted.')) return;
             aiMarkConsBtn.disabled = true;
             aiMarkConsBtn.innerHTML = '<span class="sw-spinner sw-spinner-dark"></span> Marking...';
-            ajax({action:'ai_mark', cmid:CMID, submissionid:currentSid}, function(data) {
+            ajax({action:'ai_mark', cmid:CMID, submissionid:currentSid}, function (data) {
                 aiMarkConsBtn.disabled = false;
                 aiMarkConsBtn.textContent = 'AI Mark This';
                 if (data.success) {
@@ -2113,11 +2128,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Console: release
     if (releaseBtn) {
-        releaseBtn.addEventListener('click', function() {
+        releaseBtn.addEventListener('click', function () {
             if (!currentSid) return;
             if (!confirm('Release grades to this student? They will see marks and comments.')) return;
             releaseBtn.disabled = true;
-            ajax({action:'release_grades', cmid:CMID, submissionid:currentSid}, function(data) {
+            ajax({action:'release_grades', cmid:CMID, submissionid:currentSid}, function (data) {
                 releaseBtn.disabled = false;
                 if (data.success) {
                     overlay.style.display = 'none';
@@ -2144,10 +2159,10 @@ document.addEventListener('DOMContentLoaded', function() {
             showstudentname: (studentNameToggle && studentNameToggle.checked) ? 1 : 0,
             numgroupmembers: groupMembersSelect ? parseInt(groupMembersSelect.value, 10) : 0,
             manualgrading:   (PLATFORM_MG_ALLOWED && manualGradingToggle && manualGradingToggle.checked) ? 1 : 0
-        }, function(data) {
+        }, function (data) {
             if (data.success && settingsSaved) {
                 settingsSaved.style.display = 'inline';
-                setTimeout(function(){ settingsSaved.style.display = 'none'; }, 2000);
+                setTimeout(function (){ settingsSaved.style.display = 'none'; }, 2000);
                 // Reflect mode change immediately without full page reload
                 if (typeof data.manual_grading !== 'undefined') {
                     MANUAL_GRADING = (data.manual_grading == 1);
@@ -2174,13 +2189,13 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     if (studentNameToggle) {
-        studentNameToggle.addEventListener('change', function() { syncPreviewToSettings(); saveSettings(); });
+        studentNameToggle.addEventListener('change', function () { syncPreviewToSettings(); saveSettings(); });
     }
     if (groupMembersSelect) {
-        groupMembersSelect.addEventListener('change', function() { syncPreviewToSettings(); saveSettings(); });
+        groupMembersSelect.addEventListener('change', function () { syncPreviewToSettings(); saveSettings(); });
     }
     if (manualGradingToggle) {
-        manualGradingToggle.addEventListener('change', function() { saveSettings(); });
+        manualGradingToggle.addEventListener('change', function () { saveSettings(); });
     }
 
     // ---- Manual grading console ----
@@ -2195,13 +2210,13 @@ document.addEventListener('DOMContentLoaded', function() {
     var manualMaxMap     = {};
 
     if (manualClose) {
-        manualClose.addEventListener('click', function() {
+        manualClose.addEventListener('click', function () {
             manualOverlay.style.display = 'none';
             loadSubmissions();
         });
     }
     if (manualOverlay) {
-        manualOverlay.addEventListener('click', function(e) {
+        manualOverlay.addEventListener('click', function (e) {
             if (e.target === manualOverlay) { manualOverlay.style.display = 'none'; loadSubmissions(); }
         });
     }
@@ -2209,7 +2224,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function manualRecalcTotal() {
         var total = 0;
         var max   = 0;
-        manualQContainer.querySelectorAll('.sw-checklist-mark-input').forEach(function(inp) {
+        manualQContainer.querySelectorAll('.sw-checklist-mark-input').forEach(function (inp) {
             var qid  = inp.dataset.qid;
             var val  = parseFloat(inp.value) || 0;
             total   += val;
@@ -2224,14 +2239,14 @@ document.addEventListener('DOMContentLoaded', function() {
         manualStudentName.textContent = 'Student: ' + name;
         manualOverlay.style.display = 'block';
         manualQContainer.innerHTML = '<div style="text-align:center;padding:30px;color:#9ca3af;">Loading...</div>';
-        ajax({action:'get_marks', cmid:CMID, submissionid:sid}, function(data) {
+        ajax({action:'get_marks', cmid:CMID, submissionid:sid}, function (data) {
             if (!data.success) {
                 manualQContainer.innerHTML = '<div style="color:#ef4444;padding:20px;">Failed to load: ' + (data.error||'unknown') + '</div>';
                 return;
             }
             manualMaxMap = {};
             var html = '';
-            data.questions.forEach(function(q) {
+            data.questions.forEach(function (q) {
                 if (q.qtype === 'heading' || q.qtype === 'dochtml') return;
                 manualMaxMap[q.id] = q.marks;
                 var tMark = q.teacher_mark !== null ? q.teacher_mark : '';
@@ -2277,8 +2292,8 @@ document.addEventListener('DOMContentLoaded', function() {
             manualQContainer.innerHTML = html || '<p style="color:#9ca3af;padding:20px;">No markable questions found.</p>';
 
             // Bind full-marks checkbox
-            manualQContainer.querySelectorAll('.sw-checklist-full-cb').forEach(function(cb) {
-                cb.addEventListener('change', function() {
+            manualQContainer.querySelectorAll('.sw-checklist-full-cb').forEach(function (cb) {
+                cb.addEventListener('change', function () {
                     var qid    = cb.dataset.qid;
                     var maxVal = parseFloat(cb.dataset.max) || 0;
                     var markInp = manualQContainer.querySelector('.sw-checklist-mark-input[data-qid="' + qid + '"]');
@@ -2295,8 +2310,8 @@ document.addEventListener('DOMContentLoaded', function() {
             });
 
             // Bind mark input live total
-            manualQContainer.querySelectorAll('.sw-checklist-mark-input').forEach(function(inp) {
-                inp.addEventListener('input', function() { manualRecalcTotal(); });
+            manualQContainer.querySelectorAll('.sw-checklist-mark-input').forEach(function (inp) {
+                inp.addEventListener('input', function () { manualRecalcTotal(); });
             });
 
             manualRecalcTotal();
@@ -2304,10 +2319,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     if (manualSaveBtn) {
-        manualSaveBtn.addEventListener('click', function() {
+        manualSaveBtn.addEventListener('click', function () {
             if (!manualCurrentSid) return;
             var marks = [];
-            manualQContainer.querySelectorAll('.sw-checklist-row').forEach(function(row) {
+            manualQContainer.querySelectorAll('.sw-checklist-row').forEach(function (row) {
                 var qid     = row.dataset.qid;
                 var markInp = row.querySelector('.sw-checklist-mark-input');
                 var commentEl = row.querySelector('.sw-checklist-comment');
@@ -2327,7 +2342,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 cmid:         CMID,
                 submissionid: manualCurrentSid,
                 marks:        JSON.stringify(marks)
-            }, function(data) {
+            }, function (data) {
                 manualSaveBtn.disabled = false;
                 manualSaveBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-2px;margin-right:5px;"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> Save &amp; Release Grades';
                 if (data.success) {
@@ -2347,19 +2362,19 @@ document.addEventListener('DOMContentLoaded', function() {
     var previewClose   = document.getElementById('sw-student-preview-close');
 
     if (viewStudentBtn && previewOverlay) {
-        viewStudentBtn.addEventListener('click', function() {
+        viewStudentBtn.addEventListener('click', function () {
             previewOverlay.style.display = 'block';
             document.body.style.overflow = 'hidden';
             previewOverlay.scrollTop = 0;
         });
     }
     if (previewClose && previewOverlay) {
-        previewClose.addEventListener('click', function() {
+        previewClose.addEventListener('click', function () {
             previewOverlay.style.display = 'none';
             document.body.style.overflow = '';
         });
     }
-    document.addEventListener('keydown', function(e) {
+    document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape' && previewOverlay && previewOverlay.style.display !== 'none') {
             previewOverlay.style.display = 'none';
             document.body.style.overflow = '';
@@ -2369,7 +2384,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // ================================================================
     // DOCUMENT VIEW — tab switching
     // ================================================================
-    (function() {
+    (function () {
         var tabDv  = document.getElementById('sw-tab-dv');
         var tabQl  = document.getElementById('sw-tab-ql');
         var paneDv = document.getElementById('sw-dv-wrap');
@@ -2396,14 +2411,14 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         setTab(active);
-        tabDv.addEventListener('click', function() { setTab('dv'); });
-        tabQl.addEventListener('click', function() { setTab('ql'); });
+        tabDv.addEventListener('click', function () { setTab('dv'); });
+        tabQl.addEventListener('click', function () { setTab('ql'); });
     })();
 
     // ================================================================
     // DOCUMENT VIEW — floating edit panel
     // ================================================================
-    (function() {
+    (function () {
         var fpEl       = document.getElementById('sw-fp');
         var fpBackdrop = document.getElementById('sw-fp-backdrop');
         var fpBadge    = document.getElementById('sw-fp-badge');
@@ -2426,7 +2441,7 @@ document.addEventListener('DOMContentLoaded', function() {
         function openPanel(qid, item) {
             _curQid  = qid;
             _curItem = item;
-            document.querySelectorAll('.sw-dv-item.sw-dv-selected').forEach(function(el) {
+            document.querySelectorAll('.sw-dv-item.sw-dv-selected').forEach(function (el) {
                 el.classList.remove('sw-dv-selected');
             });
             item.classList.add('sw-dv-selected');
@@ -2579,8 +2594,8 @@ document.addEventListener('DOMContentLoaded', function() {
             var rteToolbar = fpBody.querySelector('.sw-fp-rte-toolbar');
             var rteEditor  = fpBody.querySelector('#sw-fp-qtext');
             if (rteToolbar && rteEditor) {
-                rteToolbar.querySelectorAll('.sw-fp-rte-btn').forEach(function(btn) {
-                    btn.addEventListener('mousedown', function(e) {
+                rteToolbar.querySelectorAll('.sw-fp-rte-btn').forEach(function (btn) {
+                    btn.addEventListener('mousedown', function (e) {
                         e.preventDefault();
                         document.execCommand(btn.dataset.cmd, false, null);
                         rteEditor.focus();
@@ -2591,7 +2606,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // bind type selector change → rebuild
             var typeSelect = fpBody.querySelector('#sw-fp-type');
             if (typeSelect) {
-                typeSelect.addEventListener('change', function() {
+                typeSelect.addEventListener('change', function () {
                     buildBody(qid, typeSelect.value);
                 });
             }
@@ -2618,7 +2633,7 @@ document.addEventListener('DOMContentLoaded', function() {
             function _loadImg(file) {
                 if (!file || !file.type.match(/^image\//)) { return; }
                 var reader = new FileReader();
-                reader.onload = function(ev) {
+                reader.onload = function (ev) {
                     var uri = ev.target.result;
                     if (imgDataEl)    { imgDataEl.value = uri; }
                     if (imgPreviewEl) { imgPreviewEl.src = uri; imgPreviewEl.style.display = 'block'; }
@@ -2626,20 +2641,20 @@ document.addEventListener('DOMContentLoaded', function() {
                 reader.readAsDataURL(file);
             }
             if (imgPasteEl) {
-                imgPasteEl.addEventListener('paste', function(e) {
+                imgPasteEl.addEventListener('paste', function (e) {
                     var items = (e.clipboardData || e.originalEvent.clipboardData).items;
                     for (var i = 0; i < items.length; i++) {
                         if (items[i].kind === 'file') { _loadImg(items[i].getAsFile()); e.preventDefault(); return; }
                     }
                 });
-                imgPasteEl.addEventListener('dragover', function(e) { e.preventDefault(); });
-                imgPasteEl.addEventListener('drop', function(e) {
+                imgPasteEl.addEventListener('dragover', function (e) { e.preventDefault(); });
+                imgPasteEl.addEventListener('drop', function (e) {
                     e.preventDefault();
                     if (e.dataTransfer.files.length) { _loadImg(e.dataTransfer.files[0]); }
                 });
             }
             if (imgFileEl) {
-                imgFileEl.addEventListener('change', function() {
+                imgFileEl.addEventListener('change', function () {
                     if (imgFileEl.files.length) { _loadImg(imgFileEl.files[0]); }
                 });
             }
@@ -2683,7 +2698,7 @@ document.addEventListener('DOMContentLoaded', function() {
             fpSaveBtn.disabled = true;
             fpSaveBtn.textContent = 'Saving\u2026';
 
-            ajax({action:'save_questions', cmid:CMID, questions:JSON.stringify([q])}, function(data) {
+            ajax({action:'save_questions', cmid:CMID, questions:JSON.stringify([q])}, function (data) {
                 fpSaveBtn.disabled = false;
                 fpSaveBtn.textContent = 'Save';
                 if (data.success) {
@@ -2801,7 +2816,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // ---- click on document view items ----
         var dvPaper = document.getElementById('sw-dv-paper');
         if (dvPaper) {
-            dvPaper.addEventListener('click', function(e) {
+            dvPaper.addEventListener('click', function (e) {
                 var delBtn = e.target.closest('.sw-dv-delete-btn');
                 if (delBtn) {
                     var dqid = delBtn.dataset.qid;
@@ -2811,7 +2826,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         ? 'Remove this HTML display block? This cannot be undone.'
                         : 'Delete this item permanently? This cannot be undone.';
                     if (!confirm(dvDelMsg)) { return; }
-                    ajax({action:'delete_question', cmid:CMID, qid:dqid}, function(rsp) {
+                    ajax({action:'delete_question', cmid:CMID, qid:dqid}, function (rsp) {
                         if (rsp.success) {
                             var dvItem = document.querySelector('.sw-dv-item[data-qid="' + dqid + '"]');
                             if (dvItem) { dvItem.parentNode.removeChild(dvItem); }
@@ -2828,14 +2843,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // ---- delete from panel ----
         if (fpDeleteBtn) {
-            fpDeleteBtn.addEventListener('click', function() {
+            fpDeleteBtn.addEventListener('click', function () {
                 if (!_curQid) { return; }
                 var fpDelIsDochtml = _curItem && _curItem.dataset.qtype === 'dochtml';
                 var fpDelMsg = fpDelIsDochtml
                     ? 'Remove this HTML display block? This cannot be undone.'
                     : 'Delete this item permanently? This cannot be undone.';
                 if (!confirm(fpDelMsg)) { return; }
-                ajax({action:'delete_question', cmid:CMID, qid:_curQid}, function(rsp) {
+                ajax({action:'delete_question', cmid:CMID, qid:_curQid}, function (rsp) {
                     if (rsp.success) {
                         var dvItem = document.querySelector('.sw-dv-item[data-qid="' + _curQid + '"]');
                         if (dvItem) { dvItem.parentNode.removeChild(dvItem); }
@@ -2854,7 +2869,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (fpSaveBtn)  { fpSaveBtn.addEventListener('click', savePanel); }
 
         // Close on Escape (panel only — do not conflict with preview overlay)
-        document.addEventListener('keydown', function(e) {
+        document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape' && fpEl.style.display !== 'none') {
                 closePanel();
                 e.stopPropagation();

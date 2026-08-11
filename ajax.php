@@ -1,4 +1,19 @@
 <?php
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
+
 /**
  * AI Smart Workbook - AJAX handler.
  *
@@ -492,7 +507,7 @@ function smartworkbook_table_to_html(
                 'fill'     => $fill,
                 'pad'      => $pad,
                 'align'    => $align,
-                'html'     => implode('<br>', array_filter($parts, function($x) { return $x !== ''; })),
+                'html'     => implode('<br>', array_filter($parts, function ($x) { return $x !== ''; })),
                 'grid_col' => 0,
                 'rowspan'  => 1,
                 'skip'     => false,
@@ -1331,12 +1346,12 @@ switch ($action) {
 
                         foreach ($_rows_html as $_ri => $_rh) {
                             preg_match_all('/<(?:td|th)[^>]*>([\s\S]*?)<\/(?:td|th)>/i', $_rh, $_cm);
-                            $_cells = array_map(function($c) {
+                            $_cells = array_map(function ($c) {
                                 return trim(html_entity_decode(strip_tags($c), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
                             }, $_cm[1] ?? []);
 
                             // Drop rows that are entirely empty.
-                            if (empty(array_filter($_cells, function($c) { return $c !== ''; }))) {
+                            if (empty(array_filter($_cells, function ($c) { return $c !== ''; }))) {
                                 continue;
                             }
 
@@ -1361,7 +1376,7 @@ switch ($action) {
                         // If all rows were consumed as headers, demote them to data.
                         if (empty($_data_rows) && !empty($_headers)) {
                             $_data_rows[] = array_map(
-                                function($c) { return ['v' => $c, 'e' => false]; }, $_headers);
+                                function ($c) { return ['v' => $c, 'e' => false]; }, $_headers);
                             $_headers = [];
                         }
 
