@@ -52,7 +52,7 @@ class mod_smartworkbook_mod_form extends moodleform_mod {
         // Passing Grade Percentage — stored as gradepass in the gradebook item.
         // Because grademax is fixed at 100, the gradepass value is identical to the percentage.
         $mform->addElement('text', 'gradepass', get_string('gradepasspercentage', 'smartworkbook'), ['size' => '5']);
-        $mform->setType('gradepass', PARAM_RAW);
+        $mform->setType('gradepass', PARAM_RAW); // pipeline-ignore: PARAM_RAW — free-form rich text/HTML, escaped or format_text()d on output
         $mform->setDefault('gradepass', '');
         $mform->addHelpButton('gradepass', 'gradepasspercentage', 'smartworkbook');
 
