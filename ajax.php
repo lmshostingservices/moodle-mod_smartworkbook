@@ -854,13 +854,21 @@ function smartworkbook_docx_blocks(string $base64): ?array {
         return null;
     }
 
-    $tmp = tempnam(sys_get_temp_dir(), 'sw_docx_') . '.docx';
+    // Per-request temp dir is removed automatically at shutdown (no /tmp leak).
+    $tmp = make_request_directory() . '/upload.docx';
     if (file_put_contents($tmp, $bytes) === false) {
         return null;
     }
 
     $zip = new ZipArchive();
     if ($zip->open($tmp) !== true) {
+        @unlink($tmp);
+        return null;
+    }
+    // Guard against zip bombs: refuse an unreasonably large document.xml.
+    $docstat = $zip->statName('word/document.xml');
+    if (!$docstat || $docstat['size'] > 50 * 1024 * 1024) {
+        $zip->close();
         @unlink($tmp);
         return null;
     }
@@ -871,7 +879,7 @@ function smartworkbook_docx_blocks(string $base64): ?array {
     $rels_xml = $zip->getFromName('word/_rels/document.xml.rels');
     if ($rels_xml) {
         $rels_dom = new DOMDocument();
-        if (@$rels_dom->loadXML($rels_xml)) {
+        if (@$rels_dom->loadXML($rels_xml, LIBXML_NONET)) {
             foreach ($rels_dom->getElementsByTagName('Relationship') as $rel_node) {
                 $rid    = $rel_node->getAttribute('Id');
                 $rtype  = $rel_node->getAttribute('Type');
@@ -903,7 +911,7 @@ function smartworkbook_docx_blocks(string $base64): ?array {
     }
 
     $dom = new DOMDocument();
-    if (!@$dom->loadXML($xml)) {
+    if (!@$dom->loadXML($xml, LIBXML_NONET)) {
         return null;
     }
 
@@ -989,11 +997,9 @@ function smartworkbook_docx_blocks(string $base64): ?array {
     return $blocks ?: null;
 }
 
-$PAGE->set_context(context_system::instance());
-
-// Avoid require_login() — on Moodle 4.4+/5.x it performs additional course-context
-// checks that throw 'coursehidden' / "Course or activity not accessible" in AJAX context.
-// Direct isloggedin() check is sufficient; individual actions enforce context_module capability.
+// Each action calls require_login($cm->course, false, $cm, false, true) right after
+// loading its course module, so hidden/restricted activities, suspended enrolments and
+// course visibility are enforced (under AJAX_SCRIPT failures are returned as JSON).
 if (!isloggedin() || isguestuser()) {
     http_response_code(401);
     echo json_encode(['success' => false, 'error' => 'Not authenticated. Please reload the page.']);
@@ -1015,6 +1021,7 @@ switch ($action) {
         $answer     = optional_param('answer', '', PARAM_RAW); // pipeline-ignore: PARAM_RAW — free-form rich text/HTML, escaped or format_text()d on output
 
         $cm = get_coursemodule_from_id('smartworkbook', $cmid, 0, false, MUST_EXIST);
+        require_login($cm->course, false, $cm, false, true);
         $context = context_module::instance($cm->id);
         require_capability('mod/smartworkbook:submit', $context);
 
@@ -1034,24 +1041,36 @@ switch ($action) {
 
         $q = $DB->get_record('smartworkbook_question', ['id' => $questionid, 'workbookid' => $workbook->id], '*', MUST_EXIST);
 
-        $existing = $DB->get_record('smartworkbook_response', [
-            'workbookid' => $workbook->id, 'questionid' => $questionid, 'userid' => $USER->id]);
+        // In re-answer mode only the questions the teacher flagged may be changed.
+        if ($submission && $submission->status === 'reanswer'
+                && !$DB->record_exists('smartworkbook_mark',
+                    ['submissionid' => $submission->id, 'questionid' => $questionid, 'status' => 'reanswer'])) {
+            echo json_encode(['success' => false, 'error' => 'question_locked']);
+            break;
+        }
 
         $now = time();
+        $existing = $DB->get_record('smartworkbook_response', ['questionid' => $questionid, 'userid' => $USER->id]);
+        if (!$existing) {
+            try {
+                $DB->insert_record('smartworkbook_response', (object)[
+                    'workbookid'   => $workbook->id,
+                    'questionid'   => $questionid,
+                    'userid'       => $USER->id,
+                    'responsetext' => $answer,
+                    'timecreated'  => $now,
+                    'timemodified' => $now,
+                ]);
+            } catch (dml_write_exception $e) {
+                // Concurrent autosave inserted the same (questionid, userid) first: update it instead.
+                $existing = $DB->get_record('smartworkbook_response',
+                    ['questionid' => $questionid, 'userid' => $USER->id], '*', MUST_EXIST);
+            }
+        }
         if ($existing) {
             $existing->responsetext  = $answer;
             $existing->timemodified  = $now;
             $DB->update_record('smartworkbook_response', $existing);
-        } else {
-            $rec = (object)[
-                'workbookid'   => $workbook->id,
-                'questionid'   => $questionid,
-                'userid'       => $USER->id,
-                'responsetext' => $answer,
-                'timecreated'  => $now,
-                'timemodified' => $now,
-            ];
-            $DB->insert_record('smartworkbook_response', $rec);
         }
 
         echo json_encode(['success' => true]);
@@ -1062,6 +1081,7 @@ switch ($action) {
         $cmid = required_param('cmid', PARAM_INT);
 
         $cm = get_coursemodule_from_id('smartworkbook', $cmid, 0, false, MUST_EXIST);
+        require_login($cm->course, false, $cm, false, true);
         $context = context_module::instance($cm->id);
         require_capability('mod/smartworkbook:submit', $context);
 
@@ -1099,7 +1119,21 @@ switch ($action) {
                 'timemodified'  => $now,
                 'timesubmitted' => $now,
             ];
-            $DB->insert_record('smartworkbook_submission', $rec);
+            try {
+                $DB->insert_record('smartworkbook_submission', $rec);
+            } catch (dml_write_exception $e) {
+                // A draft was created concurrently (e.g. by save_meta): promote it.
+                $draft = $DB->get_record('smartworkbook_submission',
+                    ['workbookid' => $workbook->id, 'userid' => $USER->id], '*', MUST_EXIST);
+                if (in_array($draft->status, ['submitted', 'ai_marked', 'grades_released'])) {
+                    echo json_encode(['success' => false, 'error' => get_string('error_alreadysubmitted', 'smartworkbook')]);
+                    break;
+                }
+                $draft->status = 'submitted';
+                $draft->timesubmitted = $now;
+                $draft->timemodified = $now;
+                $DB->update_record('smartworkbook_submission', $draft);
+            }
         }
 
         echo json_encode(['success' => true]);
@@ -1110,6 +1144,7 @@ switch ($action) {
         $cmid = required_param('cmid', PARAM_INT);
 
         $cm = get_coursemodule_from_id('smartworkbook', $cmid, 0, false, MUST_EXIST);
+        require_login($cm->course, false, $cm, false, true);
         $context = context_module::instance($cm->id);
         require_capability('mod/smartworkbook:grade', $context);
 
@@ -1148,6 +1183,7 @@ switch ($action) {
         $cmid = required_param('cmid', PARAM_INT);
 
         $cm = get_coursemodule_from_id('smartworkbook', $cmid, 0, false, MUST_EXIST);
+        require_login($cm->course, false, $cm, false, true);
         $context = context_module::instance($cm->id);
         require_capability('mod/smartworkbook:grade', $context);
 
@@ -1174,6 +1210,7 @@ switch ($action) {
     case 'add_question':
         $cmid = required_param('cmid', PARAM_INT);
         $cm   = get_coursemodule_from_id('smartworkbook', $cmid, 0, false, MUST_EXIST);
+        require_login($cm->course, false, $cm, false, true);
         $context = context_module::instance($cm->id);
         require_capability('mod/smartworkbook:manage', $context);
 
@@ -1203,12 +1240,22 @@ switch ($action) {
         $filecontent = required_param('filecontent', PARAM_RAW); // pipeline-ignore: PARAM_RAW — base64-encoded binary payload, decoded and validated before use
 
         $cm = get_coursemodule_from_id('smartworkbook', $cmid, 0, false, MUST_EXIST);
+        require_login($cm->course, false, $cm, false, true);
         $context = context_module::instance($cm->id);
         require_capability('mod/smartworkbook:manage', $context);
 
         \core\session\manager::write_close();
 
         $workbook = $DB->get_record('smartworkbook', ['id' => $cm->instance], '*', MUST_EXIST);
+
+        // Re-converting replaces every question. Refuse once students have started
+        // answering, otherwise their responses/marks would point at deleted questions.
+        // (Checked before calling the API so no credits are spent.)
+        if ($DB->record_exists('smartworkbook_submission', ['workbookid' => $workbook->id])
+                || $DB->record_exists('smartworkbook_response', ['workbookid' => $workbook->id])) {
+            echo json_encode(['success' => false, 'error' => get_string('error_hasstudentdata', 'smartworkbook')]);
+            break;
+        }
 
         list($site_id, $api_key) = smartworkbook_get_api_credentials();
         if (empty($site_id) || empty($api_key)) {
@@ -1234,8 +1281,9 @@ switch ($action) {
 
         $data = json_decode($response, true);
 
-        if (empty($data['success']) || empty($data['questions'])) {
-            $err = $data['error'] ?? get_string('error_conversion', 'smartworkbook');
+        if (empty($data['success']) || empty($data['questions']) || !is_array($data['questions'])) {
+            $err = (is_array($data) && isset($data['error'])) ? clean_param($data['error'], PARAM_TEXT)
+                : get_string('error_conversion', 'smartworkbook');
             echo json_encode(['success' => false, 'error' => $err]);
             break;
         }
@@ -1244,6 +1292,8 @@ switch ($action) {
             ? smartworkbook_docx_blocks($filecontent)
             : null;
 
+        // All-or-nothing: a failure part-way must not leave a half-built workbook.
+        $transaction = $DB->start_delegated_transaction();
         $DB->delete_records('smartworkbook_question', ['workbookid' => $workbook->id]);
         $i = 0;
 
@@ -1534,6 +1584,7 @@ switch ($action) {
             'status'          => 'ready',
             'timemodified'    => time(),
         ]);
+        $transaction->allow_commit();
 
         echo json_encode(['success' => true, 'count' => $i]);
         break;
@@ -1544,6 +1595,7 @@ switch ($action) {
         $qid  = required_param('qid', PARAM_INT);
 
         $cm = get_coursemodule_from_id('smartworkbook', $cmid, 0, false, MUST_EXIST);
+        require_login($cm->course, false, $cm, false, true);
         $context = context_module::instance($cm->id);
         require_capability('mod/smartworkbook:manage', $context);
 
@@ -1554,6 +1606,8 @@ switch ($action) {
             echo json_encode(['success' => false, 'error' => 'not_found']);
             break;
         }
+        $DB->delete_records('smartworkbook_response', ['questionid' => $qid]);
+        $DB->delete_records('smartworkbook_mark', ['questionid' => $qid]);
         $DB->delete_records('smartworkbook_question', ['id' => $qid]);
         echo json_encode(['success' => true]);
         break;
@@ -1565,12 +1619,19 @@ switch ($action) {
         $image_data = required_param('image_data', PARAM_RAW); // pipeline-ignore: PARAM_RAW — base64-encoded binary payload, decoded and validated before use
 
         $cm      = get_coursemodule_from_id('smartworkbook', $cmid, 0, false, MUST_EXIST);
+        require_login($cm->course, false, $cm, false, true);
         $context = context_module::instance($cm->id);
         require_capability('mod/smartworkbook:manage', $context);
 
         // Must be a base64 data URI for a web-safe image type.
         if (!preg_match('/^data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+\/]+=*$/', $image_data)) {
             echo json_encode(['success' => false, 'error' => 'invalid_image_data']);
+            break;
+        }
+
+        // The question must belong to this workbook (prevents cross-course overwrite).
+        if (!$DB->record_exists('smartworkbook_question', ['id' => $qid, 'workbookid' => $cm->instance])) {
+            echo json_encode(['success' => false, 'error' => 'not_found']);
             break;
         }
 
@@ -1589,6 +1650,7 @@ switch ($action) {
         $url  = required_param('url', PARAM_TEXT);
 
         $cm      = get_coursemodule_from_id('smartworkbook', $cmid, 0, false, MUST_EXIST);
+        require_login($cm->course, false, $cm, false, true);
         $context = context_module::instance($cm->id);
         require_capability('mod/smartworkbook:manage', $context);
 
@@ -1598,6 +1660,12 @@ switch ($action) {
             break;
         }
         $url = clean_param($url, PARAM_URL);
+
+        // The question must belong to this workbook (prevents cross-course overwrite).
+        if (!$DB->record_exists('smartworkbook_question', ['id' => $qid, 'workbookid' => $cm->instance])) {
+            echo json_encode(['success' => false, 'error' => 'not_found']);
+            break;
+        }
 
         $DB->update_record('smartworkbook_question', (object)[
             'id'           => $qid,
@@ -1612,6 +1680,7 @@ switch ($action) {
         $questions = required_param('questions', PARAM_RAW); // pipeline-ignore: PARAM_RAW — JSON blob, immediately json_decode()d and validated
 
         $cm = get_coursemodule_from_id('smartworkbook', $cmid, 0, false, MUST_EXIST);
+        require_login($cm->course, false, $cm, false, true);
         $context = context_module::instance($cm->id);
         require_capability('mod/smartworkbook:manage', $context);
 
@@ -1623,8 +1692,12 @@ switch ($action) {
             break;
         }
 
+        // Only questions that belong to this workbook may be updated (prevents
+        // cross-course overwrite / stored XSS via foreign question ids).
+        $owned_qids = $DB->get_records_menu('smartworkbook_question', ['workbookid' => $workbook->id], '', 'id, workbookid');
+
         foreach ($questions as $i => $q) {
-            if (empty($q['id'])) continue;
+            if (empty($q['id']) || !isset($owned_qids[(int)$q['id']])) continue;
             $q_qtype = clean_param($q['qtype'] ?? 'text', PARAM_ALPHA);
             $q_marks = in_array($q_qtype, ['heading', 'dochtml', 'image', 'video'])
                 ? 0.0
@@ -1650,6 +1723,7 @@ switch ($action) {
         $status = required_param('status', PARAM_ALPHA);
 
         $cm = get_coursemodule_from_id('smartworkbook', $cmid, 0, false, MUST_EXIST);
+        require_login($cm->course, false, $cm, false, true);
         $context = context_module::instance($cm->id);
         require_capability('mod/smartworkbook:manage', $context);
 
@@ -1675,6 +1749,7 @@ switch ($action) {
         $submissionid = required_param('submissionid', PARAM_INT);
 
         $cm = get_coursemodule_from_id('smartworkbook', $cmid, 0, false, MUST_EXIST);
+        require_login($cm->course, false, $cm, false, true);
         $context = context_module::instance($cm->id);
         require_capability('mod/smartworkbook:grade', $context);
 
@@ -1682,6 +1757,13 @@ switch ($action) {
 
         $workbook   = $DB->get_record('smartworkbook', ['id' => $cm->instance], '*', MUST_EXIST);
         $submission = $DB->get_record('smartworkbook_submission', ['id' => $submissionid, 'workbookid' => $workbook->id], '*', MUST_EXIST);
+
+        // Never re-mark a submission whose grade has already been released (would
+        // flip it back to ai_marked while the gradebook still holds the old grade).
+        if ($submission->status === 'grades_released') {
+            echo json_encode(['success' => false, 'error' => get_string('error_alreadyreleased', 'smartworkbook')]);
+            break;
+        }
 
         list($site_id, $api_key) = smartworkbook_get_api_credentials();
         if (empty($site_id) || empty($api_key)) {
@@ -1725,38 +1807,32 @@ switch ($action) {
 
         $data = json_decode($response, true);
 
-        if (empty($data['success']) || empty($data['marks'])) {
-            $err = $data['error'] ?? get_string('error_marking', 'smartworkbook');
+        if (empty($data['success']) || empty($data['marks']) || !is_array($data['marks'])) {
+            $err = (is_array($data) && isset($data['error'])) ? clean_param($data['error'], PARAM_TEXT)
+                : get_string('error_marking', 'smartworkbook');
             echo json_encode(['success' => false, 'error' => $err]);
             break;
         }
 
-        // Save AI marks
-        // total_max must equal the full workbook maximum (all non-heading/dochtml questions),
-        // NOT just the questions the AI happened to return.  Computing it from $data['marks']
-        // means a partial API response silently shrinks max_marks and inflates the percentage.
-        $total_max = 0;
-        foreach ($questions as $q_tmp) {
-            if (in_array($q_tmp->qtype, ['heading', 'dochtml', 'image', 'video'])) continue;
-            $total_max += (float)$q_tmp->marks;
-        }
-
-        $total_earned = 0;
+        // Save AI marks. Totals are recomputed afterwards from ALL mark records via
+        // smartworkbook_recalc_submission_totals(), so teacher overrides are kept.
         $now = time();
 
         foreach ($data['marks'] as $m) {
+            if (!is_array($m) || !isset($m['questionid'])) continue;
             $qid = (int)$m['questionid'];
             $q   = $questions[$qid] ?? null;
             if (!$q) continue;
 
             $existing = $DB->get_record('smartworkbook_mark', ['submissionid' => $submission->id, 'questionid' => $qid]);
-            $mark_val = min((float)$m['mark'], (float)$q->marks);
-            $total_earned += $mark_val;
+            $mark_val = max(0.0, min((float)($m['mark'] ?? 0), (float)$q->marks));
+            $ai_conf  = in_array($m['confidence'] ?? '', ['high', 'medium', 'low'], true) ? $m['confidence'] : 'medium';
+            $ai_comm  = is_scalar($m['comment'] ?? null) ? (string)$m['comment'] : '';
 
             if ($existing) {
                 $existing->ai_mark        = $mark_val;
-                $existing->ai_comment     = $m['comment'] ?? '';
-                $existing->ai_confidence  = $m['confidence'] ?? 'medium';
+                $existing->ai_comment     = $ai_comm;
+                $existing->ai_confidence  = $ai_conf;
                 $existing->status         = 'ai_done';
                 $existing->timemodified   = $now;
                 $DB->update_record('smartworkbook_mark', $existing);
@@ -1765,8 +1841,8 @@ switch ($action) {
                     'submissionid'  => $submission->id,
                     'questionid'    => $qid,
                     'ai_mark'       => $mark_val,
-                    'ai_comment'    => $m['comment'] ?? '',
-                    'ai_confidence' => $m['confidence'] ?? 'medium',
+                    'ai_comment'    => $ai_comm,
+                    'ai_confidence' => $ai_conf,
                     'status'        => 'ai_done',
                     'timecreated'   => $now,
                     'timemodified'  => $now,
@@ -1775,13 +1851,8 @@ switch ($action) {
         }
 
         // Update submission
-        $DB->update_record('smartworkbook_submission', (object)[
-            'id'           => $submission->id,
-            'status'       => 'ai_marked',
-            'total_marks'  => $total_earned,
-            'max_marks'    => $total_max,
-            'timemodified' => $now,
-        ]);
+        $DB->set_field('smartworkbook_submission', 'status', 'ai_marked', ['id' => $submission->id]);
+        [$total_earned, $total_max] = smartworkbook_recalc_submission_totals((int)$submission->id, (int)$workbook->id);
 
         echo json_encode(['success' => true, 'total_earned' => $total_earned, 'total_max' => $total_max]);
         break;
@@ -1796,11 +1867,14 @@ switch ($action) {
         $status       = optional_param('mark_status', 'approved', PARAM_ALPHA);
 
         $cm = get_coursemodule_from_id('smartworkbook', $cmid, 0, false, MUST_EXIST);
+        require_login($cm->course, false, $cm, false, true);
         $context = context_module::instance($cm->id);
         require_capability('mod/smartworkbook:grade', $context);
 
         $workbook = $DB->get_record('smartworkbook', ['id' => $cm->instance], '*', MUST_EXIST);
         $q = $DB->get_record('smartworkbook_question', ['id' => $questionid, 'workbookid' => $workbook->id], '*', MUST_EXIST);
+        // The submission must belong to this workbook (prevents cross-course grade tampering).
+        $DB->get_record('smartworkbook_submission', ['id' => $submissionid, 'workbookid' => $workbook->id], 'id', MUST_EXIST);
 
         $mark = min(max(0, (float)$mark), (float)$q->marks);
         $allowed_statuses = ['approved', 'overridden', 'reanswer'];
@@ -1831,32 +1905,7 @@ switch ($action) {
         // Computing it only from mark records causes it to shrink when some questions
         // have no record yet, producing an inflated percentage at release time.
         // total_earned = sum of best available marks, skipping questions awaiting re-answer.
-        $marks_all = $DB->get_records('smartworkbook_mark', ['submissionid' => $submissionid]);
-        $questions_all = $DB->get_records('smartworkbook_question', ['workbookid' => $workbook->id]);
-        $q_map = [];
-        foreach ($questions_all as $qq) { $q_map[$qq->id] = $qq; }
-
-        $marks_by_qid = [];
-        foreach ($marks_all as $mm) { $marks_by_qid[$mm->questionid] = $mm; }
-
-        $total_earned = 0;
-        $total_max    = 0;
-        foreach ($questions_all as $qq) {
-            if (in_array($qq->qtype, ['heading', 'dochtml', 'image', 'video'])) continue;
-            $total_max += (float)$qq->marks;
-            if (!isset($marks_by_qid[$qq->id])) continue;
-            $mm = $marks_by_qid[$qq->id];
-            if ($mm->status === 'reanswer') continue; // zero contribution until student resubmits
-            $final = $mm->teacher_mark ?? $mm->ai_mark ?? 0;
-            $total_earned += (float)$final;
-        }
-
-        $DB->update_record('smartworkbook_submission', (object)[
-            'id'           => $submissionid,
-            'total_marks'  => $total_earned,
-            'max_marks'    => $total_max,
-            'timemodified' => $now,
-        ]);
+        [$total_earned, $total_max] = smartworkbook_recalc_submission_totals((int)$submissionid, (int)$workbook->id);
 
         echo json_encode(['success' => true, 'total_earned' => $total_earned, 'total_max' => $total_max]);
         break;
@@ -1868,6 +1917,7 @@ switch ($action) {
         $feedback     = optional_param('feedback', '', PARAM_RAW); // pipeline-ignore: PARAM_RAW — free-form rich text/HTML, escaped or format_text()d on output
 
         $cm = get_coursemodule_from_id('smartworkbook', $cmid, 0, false, MUST_EXIST);
+        require_login($cm->course, false, $cm, false, true);
         $context = context_module::instance($cm->id);
         require_capability('mod/smartworkbook:grade', $context);
 
@@ -1906,6 +1956,7 @@ switch ($action) {
         $submissionid = required_param('submissionid', PARAM_INT);
 
         $cm = get_coursemodule_from_id('smartworkbook', $cmid, 0, false, MUST_EXIST);
+        require_login($cm->course, false, $cm, false, true);
         $context = context_module::instance($cm->id);
         require_capability('mod/smartworkbook:grade', $context);
 
@@ -1941,6 +1992,7 @@ switch ($action) {
         $submissionid = required_param('submissionid', PARAM_INT);
 
         $cm = get_coursemodule_from_id('smartworkbook', $cmid, 0, false, MUST_EXIST);
+        require_login($cm->course, false, $cm, false, true);
         $context = context_module::instance($cm->id);
         require_capability('mod/smartworkbook:grade', $context);
 
@@ -1995,6 +2047,7 @@ switch ($action) {
         $cmid = required_param('cmid', PARAM_INT);
 
         $cm = get_coursemodule_from_id('smartworkbook', $cmid, 0, false, MUST_EXIST);
+        require_login($cm->course, false, $cm, false, true);
         $context = context_module::instance($cm->id);
         require_capability('mod/smartworkbook:manage', $context);
 
@@ -2050,20 +2103,27 @@ switch ($action) {
         // Do NOT check empty($data['answers']) — an empty array is valid when all
         // questions already had existing answers and nothing needed regenerating.
         if (empty($data['success'])) {
-            $err = $data['error'] ?? 'Model answer generation failed. Please try again.';
+            $err = (is_array($data) && isset($data['error'])) ? clean_param($data['error'], PARAM_TEXT)
+                : 'Model answer generation failed. Please try again.';
             echo json_encode(['success' => false, 'error' => $err]);
             break;
         }
 
-        foreach ($data['answers'] as $ans) {
+        $answers = (isset($data['answers']) && is_array($data['answers'])) ? $data['answers'] : [];
+        $updated = 0;
+        foreach ($answers as $ans) {
+            if (!is_array($ans) || !isset($ans['id'])) continue;
             $qid = (int)$ans['id'];
+            // Only accept ids that belong to this workbook.
+            if (!isset($questions[$qid])) continue;
             $DB->update_record('smartworkbook_question', (object)[
                 'id'           => $qid,
-                'model_answer' => clean_param($ans['model_answer'], PARAM_RAW), // pipeline-ignore: PARAM_RAW — free-form rich text/HTML, escaped or format_text()d on output
+                'model_answer' => clean_param((string)($ans['model_answer'] ?? ''), PARAM_RAW), // pipeline-ignore: PARAM_RAW — free-form rich text/HTML, escaped or format_text()d on output
             ]);
+            $updated++;
         }
 
-        echo json_encode(['success' => true, 'count' => count($data['answers'])]);
+        echo json_encode(['success' => true, 'count' => $updated]);
         break;
 
     // ---- save_meta: store group member names (and any other per-submission metadata) ----
@@ -2072,6 +2132,7 @@ switch ($action) {
         $meta = required_param('meta', PARAM_RAW); // pipeline-ignore: PARAM_RAW — JSON blob, immediately json_decode()d and validated
 
         $cm      = get_coursemodule_from_id('smartworkbook', $cmid, 0, false, MUST_EXIST);
+        require_login($cm->course, false, $cm, false, true);
         $context = context_module::instance($cm->id);
         require_capability('mod/smartworkbook:submit', $context);
 
@@ -2089,7 +2150,12 @@ switch ($action) {
             'userid'     => $USER->id,
         ]);
 
-        $clean_meta = clean_param($meta, PARAM_RAW); // pipeline-ignore: PARAM_RAW — JSON blob, immediately json_decode()d and validated
+        // Store only the re-encoded, validated structure (bounded size).
+        $clean_meta = json_encode($meta_arr);
+        if ($clean_meta === false || strlen($clean_meta) > 65535) {
+            echo json_encode(['success' => false, 'error' => 'invalid_meta']);
+            break;
+        }
 
         if ($submission) {
             // Only update if not fully locked (submitted/ai_marked/grades_released without reanswer)
@@ -2103,14 +2169,20 @@ switch ($action) {
                 ]);
             }
         } else {
-            $DB->insert_record('smartworkbook_submission', (object)[
-                'workbookid'  => $workbook->id,
-                'userid'      => $USER->id,
-                'status'      => 'draft',
-                'meta_json'   => $clean_meta,
-                'timecreated' => time(),
-                'timemodified' => time(),
-            ]);
+            try {
+                $DB->insert_record('smartworkbook_submission', (object)[
+                    'workbookid'  => $workbook->id,
+                    'userid'      => $USER->id,
+                    'status'      => 'draft',
+                    'meta_json'   => $clean_meta,
+                    'timecreated' => time(),
+                    'timemodified' => time(),
+                ]);
+            } catch (dml_write_exception $e) {
+                // Concurrent request created the draft first: just update its metadata.
+                $DB->set_field('smartworkbook_submission', 'meta_json', $clean_meta,
+                    ['workbookid' => $workbook->id, 'userid' => $USER->id, 'status' => 'draft']);
+            }
         }
 
         echo json_encode(['success' => true]);
@@ -2119,6 +2191,7 @@ switch ($action) {
     case 'save_settings':
         $cmid = required_param('cmid', PARAM_INT);
         $cm   = get_coursemodule_from_id('smartworkbook', $cmid, 0, false, MUST_EXIST);
+        require_login($cm->course, false, $cm, false, true);
         $context  = context_module::instance($cm->id);
         require_capability('mod/smartworkbook:manage', $context);
         $workbook = $DB->get_record('smartworkbook', ['id' => $cm->instance], '*', MUST_EXIST);
@@ -2142,6 +2215,7 @@ switch ($action) {
         $marks_json   = required_param('marks', PARAM_RAW); // pipeline-ignore: PARAM_RAW — JSON blob, immediately json_decode()d and validated
 
         $cm = get_coursemodule_from_id('smartworkbook', $cmid, 0, false, MUST_EXIST);
+        require_login($cm->course, false, $cm, false, true);
         $context = context_module::instance($cm->id);
         require_capability('mod/smartworkbook:grade', $context);
 

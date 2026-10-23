@@ -52,12 +52,12 @@ try {
             'CURLOPT_CONNECTTIMEOUT' => 3,
         ]);
         $sw_qs = http_build_query([
-            'apiKey'       => $sw_apikey,
             'courseId'     => $cm->course,
             'cmId'         => $cm->id,
             'courseName'   => $course->fullname,
             'activityName' => $workbook->name,
         ]);
+        $sw_curl->setHeader(['X-Api-Key: ' . $sw_apikey]);
         $sw_resp = $sw_curl->get('https://lms-labs.com/api/smartworkbook/grading-check?' . $sw_qs);
         if ($sw_resp) {
             $sw_data = @json_decode($sw_resp, true);
@@ -67,11 +67,18 @@ try {
             if (isset($sw_data['passing_percentage']) && is_numeric($sw_data['passing_percentage'])) {
                 $platform_passing_pct = (int)$sw_data['passing_percentage'];
                 // Apply to Moodle gradebook (grademax=100 for smartworkbook, so pct = gradepass directly).
-                $current_gradepass = isset($workbook->gradepass) ? (float)$workbook->gradepass : 0.0;
-                if (abs($current_gradepass - $platform_passing_pct) > 0.01) {
-                    $workbook->gradepass = (float)$platform_passing_pct;
-                    $DB->set_field('smartworkbook', 'gradepass', $platform_passing_pct, ['id' => $workbook->id]);
-                    smartworkbook_grade_item_update($workbook);
+                // gradepass lives on the grade item only — there is no smartworkbook.gradepass column.
+                require_once($CFG->libdir . '/gradelib.php');
+                $sw_gi = grade_item::fetch([
+                    'courseid' => $course->id, 'itemtype' => 'mod', 'itemmodule' => 'smartworkbook',
+                    'iteminstance' => $workbook->id, 'itemnumber' => 0,
+                ]);
+                $current_gradepass = $sw_gi ? (float)$sw_gi->gradepass : 0.0;
+                if ($platform_passing_pct >= 0 && $platform_passing_pct <= 100
+                        && abs($current_gradepass - $platform_passing_pct) > 0.01) {
+                    $sw_wb = clone $workbook;
+                    $sw_wb->gradepass = (float)$platform_passing_pct;
+                    smartworkbook_grade_item_update($sw_wb);
                 }
             }
         }
@@ -1049,6 +1056,15 @@ document.addEventListener('DOMContentLoaded', function () {
     var MANUAL_GRADING = <?php echo $effective_manual_grading ? 'true' : 'false'; ?>;
     var PLATFORM_MG_ALLOWED = <?php echo $platform_mg_allowed ? 'true' : 'false'; ?>;
 
+    // HTML-escape untrusted values (student input, names, AI/API text) before
+    // inserting into innerHTML or attribute strings.
+    function swEsc(s) {
+        return String(s === null || s === undefined ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+    function swEscMultiline(s) { return swEsc(s).replace(/\r?\n/g, '<br>'); }
+
     function ajax(params, cb) {
         params.sesskey = WB_SESS;
         fetch(AJAX_URL, {
@@ -1098,9 +1114,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 var actions = '<div class="sw-action-btns">';
                 if (MANUAL_GRADING) {
                     var gradeLabel = s.status === 'submitted' ? 'Grade' : 'Review';
-                    actions += '<button class="btn btn-sm btn-outline-secondary sw-open-manual" data-sid="' + s.id + '" data-name="' + s.name + '">' + gradeLabel + '</button>';
+                    actions += '<button class="btn btn-sm btn-outline-secondary sw-open-manual" data-sid="' + s.id + '" data-name="' + swEsc(s.name) + '">' + gradeLabel + '</button>';
                 } else {
-                    actions += '<button class="btn btn-sm btn-outline-secondary sw-open-console" data-sid="' + s.id + '" data-name="' + s.name + '">Review</button>';
+                    actions += '<button class="btn btn-sm btn-outline-secondary sw-open-console" data-sid="' + s.id + '" data-name="' + swEsc(s.name) + '">Review</button>';
                     if (s.status === 'submitted') {
                         actions += '<button class="btn btn-sm btn-primary sw-ai-mark-one" data-sid="' + s.id + '">AI Mark</button>';
                     }
@@ -1111,7 +1127,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 actions += '</div>';
                 var tr = document.createElement('tr');
                 tr.innerHTML =
-                    '<td class="sw-student-name">' + s.name + '</td>' +
+                    '<td class="sw-student-name">' + swEsc(s.name) + '</td>' +
                     '<td><span class="sw-sub-status sw-sub-status-' + s.status + '"><span class="sw-sub-status-dot"></span>' + statusLabel + '</span></td>' +
                     '<td class="sw-score-cell">' + score + '</td>' +
                     '<td>' + submitted + '</td>' +
@@ -2007,7 +2023,7 @@ document.addEventListener('DOMContentLoaded', function () {
         qContainer.innerHTML = '<div style="text-align:center;padding:30px;color:#9ca3af;">Loading...</div>';
         ajax({action:'get_marks', cmid:CMID, submissionid:sid}, function (data) {
             if (!data.success) {
-                qContainer.innerHTML = '<div style="color:#ef4444;padding:20px;">Failed to load: ' + (data.error||'unknown') + '</div>';
+                qContainer.innerHTML = '<div style="color:#ef4444;padding:20px;">Failed to load: ' + swEsc(data.error||'unknown') + '</div>';
                 return;
             }
             var earned = parseFloat(data.submission.total_marks || 0).toFixed(1);
@@ -2029,24 +2045,24 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 html += '<div class="sw-mark-question" data-qid="' + q.id + '">';
                 html += '  <div class="sw-mark-q-header">';
-                html += '    <div class="sw-mark-q-text">' + (q.label ? '<strong>' + q.label + '</strong> &mdash; ' : '') + q.questiontext + '</div>';
+                html += '    <div class="sw-mark-q-text">' + (q.label ? '<strong>' + swEsc(q.label) + '</strong> &mdash; ' : '') + q.questiontext + '</div>';
                 html += '    <div class="sw-mark-q-maxmarks">/ ' + q.marks + ' marks</div>';
                 html += '  </div>';
-                html += '  <div class="sw-mark-answer-block"><div class="sw-mark-answer-label">Student answer</div>' + (q.student_answer || '<em style="color:#94a3b8">No answer provided</em>') + '</div>';
+                html += '  <div class="sw-mark-answer-block"><div class="sw-mark-answer-label">Student answer</div>' + (q.student_answer ? swEscMultiline(q.student_answer) : '<em style="color:#94a3b8">No answer provided</em>') + '</div>';
                 if (q.model_answer) {
                     html += '  <div class="sw-mark-answer-block sw-mark-answer-block-model"><div class="sw-mark-answer-label sw-mark-answer-label-model">Model answer</div>' + q.model_answer + '</div>';
                 }
                 if (aiMark !== '') {
-                    var confBadge = q.ai_confidence ? '<span class="sw-ai-confidence ' + confClass + '">' + q.ai_confidence + '</span>' : '';
+                    var confBadge = q.ai_confidence ? '<span class="sw-ai-confidence ' + confClass + '">' + swEsc(q.ai_confidence) + '</span>' : '';
                     html += '  <div class="sw-ai-suggestion"><div class="sw-ai-suggestion-label">AI Suggestion</div>';
                     html += '  <span class="sw-ai-mark-val">' + aiMark + ' / ' + q.marks + '</span>' + confBadge;
-                    if (q.ai_comment) html += '  <div style="font-size:0.84rem;color:#6b7280;margin-top:6px;line-height:1.5;">' + q.ai_comment + '</div>';
+                    if (q.ai_comment) html += '  <div style="font-size:0.84rem;color:#6b7280;margin-top:6px;line-height:1.5;">' + swEscMultiline(q.ai_comment) + '</div>';
                     html += '  </div>';
                 }
                 html += '  <div class="sw-mark-controls">';
                 html += '    <span class="sw-mark-controls-label">Mark</span>';
                 html += '    <input type="number" class="sw-mark-input" data-qid="' + q.id + '" value="' + tMark + '" min="0" max="' + q.marks + '" step="0.5" placeholder="0">';
-                html += '    <textarea class="sw-comment-input" rows="2" data-qid="' + q.id + '" placeholder="Add feedback comment...">' + comment + '</textarea>';
+                html += '    <textarea class="sw-comment-input" rows="2" data-qid="' + q.id + '" placeholder="Add feedback comment...">' + swEsc(comment) + '</textarea>';
                 html += '    <select class="sw-mark-status-select sw-mark-status" data-qid="' + q.id + '">';
                 html += '      <option value="approved"'  + (q.mark_status==='approved'  ?' selected':'') + '>Approved</option>';
                 html += '      <option value="overridden"'+ (q.mark_status==='overridden'?' selected':'') + '>Override</option>';
@@ -2241,7 +2257,7 @@ document.addEventListener('DOMContentLoaded', function () {
         manualQContainer.innerHTML = '<div style="text-align:center;padding:30px;color:#9ca3af;">Loading...</div>';
         ajax({action:'get_marks', cmid:CMID, submissionid:sid}, function (data) {
             if (!data.success) {
-                manualQContainer.innerHTML = '<div style="color:#ef4444;padding:20px;">Failed to load: ' + (data.error||'unknown') + '</div>';
+                manualQContainer.innerHTML = '<div style="color:#ef4444;padding:20px;">Failed to load: ' + swEsc(data.error||'unknown') + '</div>';
                 return;
             }
             manualMaxMap = {};
@@ -2257,7 +2273,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 // Question header
                 html += '<div class="sw-checklist-q-header">';
-                html += '  <div class="sw-checklist-q-text">' + (q.label ? '<strong>' + q.label + '</strong> &mdash; ' : '') + q.questiontext + '</div>';
+                html += '  <div class="sw-checklist-q-text">' + (q.label ? '<strong>' + swEsc(q.label) + '</strong> &mdash; ' : '') + q.questiontext + '</div>';
                 html += '  <div class="sw-checklist-q-max">/ ' + q.marks + '</div>';
                 html += '</div>';
 
@@ -2265,7 +2281,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (q.student_answer) {
                     html += '<div class="sw-checklist-answer">';
                     html += '  <div class="sw-checklist-answer-label">Student answer</div>';
-                    html += '  <div class="sw-checklist-answer-text">' + q.student_answer + '</div>';
+                    html += '  <div class="sw-checklist-answer-text">' + swEscMultiline(q.student_answer) + '</div>';
                     html += '</div>';
                 } else {
                     html += '<div class="sw-checklist-answer sw-checklist-answer-empty"><em>No answer provided</em></div>';
@@ -2284,7 +2300,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 html += '</div>';
 
                 // Comment
-                html += '<textarea class="sw-checklist-comment" data-qid="' + q.id + '" rows="2" placeholder="Optional feedback comment...">' + comment + '</textarea>';
+                html += '<textarea class="sw-checklist-comment" data-qid="' + q.id + '" rows="2" placeholder="Optional feedback comment...">' + swEsc(comment) + '</textarea>';
 
                 html += '</div>';
             });

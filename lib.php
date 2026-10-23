@@ -24,14 +24,27 @@
 
 defined('MOODLE_INTERNAL') || die();
 
+/**
+ * Declare supported Moodle features.
+ *
+ * FEATURE_COMPLETION_HAS_RULES is deliberately NOT declared: the plugin has no
+ * custom completion rules or \mod_smartworkbook\completion\custom_completion
+ * class. Core completion (view / receive grade / passing grade) still works.
+ *
+ * @param string $feature FEATURE_xx constant
+ * @return mixed
+ */
 function smartworkbook_supports($feature) {
     switch ($feature) {
         case FEATURE_MOD_INTRO:               return true;
         case FEATURE_SHOW_DESCRIPTION:        return true;
         case FEATURE_GRADE_HAS_GRADE:         return true;
+        case FEATURE_GRADE_OUTCOMES:          return false;
         case FEATURE_BACKUP_MOODLE2:          return true;
         case FEATURE_COMPLETION_TRACKS_VIEWS: return true;
-        case FEATURE_COMPLETION_HAS_RULES:    return true;
+        case FEATURE_COMPLETION_HAS_RULES:    return false;
+        case FEATURE_GROUPS:                  return false;
+        case FEATURE_MOD_PURPOSE:             return MOD_PURPOSE_ASSESSMENT;
         default: return null;
     }
 }
@@ -198,6 +211,52 @@ function smartworkbook_get_api_credentials() {
     }
 
     return [$site_id, $api_key];
+}
+
+/**
+ * Recalculate and store total_marks / max_marks for a submission.
+ *
+ * Single source of truth used by both AI marking and teacher marking so a
+ * re-run of AI marking can never discard teacher overrides.
+ *  - max   = sum of marks of every gradable question in the workbook.
+ *  - earned = per question: teacher_mark if set, else ai_mark; questions
+ *    flagged 'reanswer' contribute 0 until the student resubmits.
+ *
+ * @param int $submissionid
+ * @param int $workbookid
+ * @return array [float $earned, float $max]
+ */
+function smartworkbook_recalc_submission_totals(int $submissionid, int $workbookid): array {
+    global $DB;
+
+    $questions = $DB->get_records('smartworkbook_question', ['workbookid' => $workbookid], '', 'id, qtype, marks');
+    $marks = [];
+    foreach ($DB->get_records('smartworkbook_mark', ['submissionid' => $submissionid]) as $m) {
+        $marks[$m->questionid] = $m;
+    }
+
+    $earned = 0.0;
+    $max    = 0.0;
+    foreach ($questions as $q) {
+        if (in_array($q->qtype, ['heading', 'dochtml', 'image', 'video'])) {
+            continue;
+        }
+        $max += (float)$q->marks;
+        if (!isset($marks[$q->id]) || $marks[$q->id]->status === 'reanswer') {
+            continue;
+        }
+        $m = $marks[$q->id];
+        $earned += (float)($m->teacher_mark ?? $m->ai_mark ?? 0);
+    }
+
+    $DB->update_record('smartworkbook_submission', (object)[
+        'id'           => $submissionid,
+        'total_marks'  => $earned,
+        'max_marks'    => $max,
+        'timemodified' => time(),
+    ]);
+
+    return [$earned, $max];
 }
 
 /**

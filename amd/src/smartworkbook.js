@@ -6,7 +6,7 @@
  *
  * @module mod_smartworkbook/smartworkbook
  */
-define('mod_smartworkbook/smartworkbook', ['core/ajax', 'core/notification'], function(Ajax, Notification) {
+define('mod_smartworkbook/smartworkbook', ['core/notification'], function(Notification) {
 
     var CMID = 0;
     var WB_ID = 0;
@@ -71,11 +71,7 @@ define('mod_smartworkbook/smartworkbook', ['core/ajax', 'core/notification'], fu
      * Collect the current value of every editable field and save them all at once.
      * Called when the student clicks the "Save progress" button.
      */
-    function saveAll(btn) {
-        btn.disabled = true;
-        var origText = btn.textContent;
-        btn.textContent = 'Saving...';
-
+    function collectSavePromises() {
         var promises = [];
 
         // Text / long-answer textareas
@@ -129,6 +125,27 @@ define('mod_smartworkbook/smartworkbook', ['core/ajax', 'core/notification'], fu
             if (!hasEditable) { return; }
             promises.push(saveResponseSilent(qid, JSON.stringify(cellMap)));
         });
+
+        return promises;
+    }
+
+    /**
+     * Cancel any pending debounced autosaves (their values are re-sent by collectSavePromises()).
+     */
+    function clearPendingAutosaves() {
+        Object.keys(debounceTimers).forEach(function(qid) {
+            clearTimeout(debounceTimers[qid]);
+            delete debounceTimers[qid];
+        });
+    }
+
+    function saveAll(btn) {
+        btn.disabled = true;
+        var origText = btn.textContent;
+        btn.textContent = 'Saving...';
+
+        clearPendingAutosaves();
+        var promises = collectSavePromises();
 
         // Group member names (non-blocking, runs in parallel with responses)
         saveMeta();
@@ -302,12 +319,23 @@ define('mod_smartworkbook/smartworkbook', ['core/ajax', 'core/notification'], fu
             if (!confirm(confirmMsg)) return;
             btn.disabled = true;
             btn.innerHTML = '<span class="sw-spinner"></span> Submitting...';
-            var params = new URLSearchParams({
-                action: 'submit',
-                cmid: CMID,
-                sesskey: M.cfg.sesskey
-            });
-            fetch(AJAX_URL, {method: 'POST', body: params})
+            // Flush every editable answer first so nothing typed in the last
+            // debounce window is lost (a save arriving after submit is rejected).
+            clearPendingAutosaves();
+            Promise.all(collectSavePromises())
+                .then(function(results) {
+                    var failed = results.filter(function(res) {
+                        return !res || (!res.success && res.error !== 'question_locked');
+                    });
+                    if (failed.length) {
+                        throw new Error((failed[0] && failed[0].error) || 'save_failed');
+                    }
+                    return fetch(AJAX_URL, {method: 'POST', body: new URLSearchParams({
+                        action: 'submit',
+                        cmid: CMID,
+                        sesskey: M.cfg.sesskey
+                    })});
+                })
                 .then(function(r) { return r.json(); })
                 .then(function(data) {
                     if (data.success) {
@@ -321,6 +349,8 @@ define('mod_smartworkbook/smartworkbook', ['core/ajax', 'core/notification'], fu
                 .catch(function() {
                     btn.disabled = false;
                     btn.textContent = IS_REANSWER ? 'Resubmit Workbook' : 'Submit Workbook';
+                    Notification.alert('', 'Your answers could not be saved, so the workbook was not submitted. ' +
+                        'Please check your connection and try again.');
                 });
         });
     }

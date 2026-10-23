@@ -44,6 +44,16 @@ $PAGE->set_heading(format_string($course->fullname));
 $PAGE->set_context($context);
 $PAGE->requires->css('/mod/smartworkbook/styles.css');
 
+require_capability('mod/smartworkbook:view', $context);
+
+$event = \mod_smartworkbook\event\course_module_viewed::create([
+    'objectid' => $workbook->id,
+    'context'  => $context,
+]);
+$event->add_record_snapshot('course', $course);
+$event->add_record_snapshot('smartworkbook', $workbook);
+$event->trigger();
+
 $completion = new completion_info($course);
 $completion->set_module_viewed($cm);
 
@@ -51,19 +61,16 @@ $can_grade  = has_capability('mod/smartworkbook:grade', $context);
 $can_manage = has_capability('mod/smartworkbook:manage', $context);
 $can_submit = has_capability('mod/smartworkbook:submit', $context);
 
-$preview = optional_param('preview', 0, PARAM_INT);
+// Preview bypasses the "published" gate, so only managers may use it.
+$preview = $can_manage ? optional_param('preview', 0, PARAM_INT) : 0;
+
+// Teacher sees management dashboard (unless previewing as student).
+// Server-side redirect (was a JS redirect emitted after the page header).
+if ($can_manage && !$preview) {
+    redirect(new moodle_url('/mod/smartworkbook/teacher.php', ['id' => $id]));
+}
 
 echo $OUTPUT->header();
-
-// Teacher sees management dashboard (unless previewing as student)
-if ($can_manage && !$preview) {
-    echo '<script>window.location.href="' . (new moodle_url('/mod/smartworkbook/teacher.php', ['id' => $id]))->out(false) . '";</script>';
-    echo '<p>' . get_string('teacherdashboard', 'smartworkbook') . ' - <a href="' .
-         (new moodle_url('/mod/smartworkbook/teacher.php', ['id' => $id]))->out() . '">' .
-         get_string('teacherdashboard', 'smartworkbook') . '</a></p>';
-    echo $OUTPUT->footer();
-    exit;
-}
 
 // Students: check if published (preview bypasses this gate)
 if ($workbook->status !== 'published' && !$preview) {

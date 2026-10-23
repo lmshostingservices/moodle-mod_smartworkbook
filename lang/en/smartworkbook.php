@@ -137,6 +137,8 @@ $string['error_marking']       = 'AI marking failed. Please try again.';
 $string['error_notpublished']  = 'This workbook has not been published yet.';
 $string['error_alreadysubmitted'] = 'You have already submitted this workbook.';
 $string['error_insufficientcredits'] = 'Insufficient AI Grader credits. Please top up your credits and try again.';
+$string['error_alreadyreleased'] = 'Grades for this submission have already been released. Request a re-answer from the student before marking it again.';
+$string['error_hasstudentdata'] = 'Students have already started this workbook. Re-converting would replace every question and orphan their answers. Create a new AI Smart Workbook activity for the new document instead.';
 
 // Workbook display options (mod_form)
 $string['displayoptions']        = 'Workbook display options';
@@ -169,9 +171,23 @@ $string['groupmembers_label']    = 'Group Members';
 $string['groupmember_n']         = 'Member {$a}';
 
 // Privacy
+$string['privacy:metadata:timecreated']                    = 'The time the record was created.';
+$string['privacy:metadata:timemodified']                   = 'The time the record was last modified.';
 $string['privacy:metadata:smartworkbook_response']         = 'Stores student answers for each question.';
 $string['privacy:metadata:smartworkbook_response:userid']  = 'The user who provided the answer.';
 $string['privacy:metadata:smartworkbook_response:responsetext'] = 'The student\'s typed answer.';
 $string['privacy:metadata:smartworkbook_submission']       = 'Stores student submission records and grades.';
 $string['privacy:metadata:smartworkbook_submission:userid'] = 'The user who made the submission.';
+$string['privacy:metadata:smartworkbook_submission:status'] = 'The status of the submission.';
 $string['privacy:metadata:smartworkbook_submission:grade'] = 'The grade awarded for the submission.';
+$string['privacy:metadata:smartworkbook_submission:teacher_feedback'] = 'Overall feedback from the teacher.';
+$string['privacy:metadata:smartworkbook_submission:graderid'] = 'The teacher who graded the submission.';
+$string['privacy:metadata:smartworkbook_submission:meta_json'] = 'Student and group member names entered on the workbook.';
+$string['privacy:metadata:smartworkbook_submission:timesubmitted'] = 'The time the workbook was submitted.';
+$string['privacy:metadata:smartworkbook_mark']             = 'Stores per-question marks and comments for a submission.';
+$string['privacy:metadata:smartworkbook_mark:ai_mark']     = 'The mark suggested by AI marking.';
+$string['privacy:metadata:smartworkbook_mark:ai_comment']  = 'The comment suggested by AI marking.';
+$string['privacy:metadata:smartworkbook_mark:teacher_mark'] = 'The mark awarded by the teacher.';
+$string['privacy:metadata:smartworkbook_mark:teacher_comment'] = 'The comment written by the teacher.';
+$string['privacy:metadata:aigrader']                       = 'Student answers are sent to the external AI Grader service (lms-labs.com) to be marked.';
+$string['privacy:metadata:aigrader:responsetext']          = 'The student\'s answers to the workbook questions.';

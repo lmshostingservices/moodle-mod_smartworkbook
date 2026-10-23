@@ -43,16 +43,22 @@ require_once($CFG->dirroot . '/mod/smartworkbook/backup/moodle2/backup_smartwork
  */
 class backup_smartworkbook_activity_task extends backup_activity_task {
     /**
-     * No extra settings beyond the standard ones (userinfo).
+     * No extra settings beyond the standard ones (included, userinfo).
+     *
+     * NOTE: must NOT override define_settings() — the parent builds the core
+     * "included"/"userinfo" settings there. Earlier releases declared a *static*
+     * define_settings(), which is a PHP compile-time fatal error and broke every
+     * backup, duplicate, import, course copy, recycle bin and Sharing Cart action
+     * on any course containing this activity (blank HTTP 500).
      */
-    protected static function define_settings() {
+    protected function define_my_settings() {
     }
 
     /**
      * Register the single structure step that serialises the activity data to
      * smartworkbook.xml inside the activity backup directory.
      */
-    protected function define_steps() {
+    protected function define_my_steps() {
         $this->add_step(new backup_smartworkbook_activity_structure_step(
             'smartworkbook_structure',
             'smartworkbook.xml'

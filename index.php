@@ -32,7 +32,7 @@ $course = $DB->get_record('course', ['id' => $id], '*', MUST_EXIST);
 require_course_login($course);
 $PAGE->set_pagelayout('incourse');
 
-$event = \core\event\course_module_instance_list_viewed::create([
+$event = \mod_smartworkbook\event\course_module_instance_list_viewed::create([
     'context' => context_course::instance($course->id),
 ]);
 $event->add_record_snapshot('course', $course);
