@@ -109,16 +109,16 @@ if ($preview) {
     $is_reanswer        = $submission && $submission->status === 'reanswer';
     $is_grades_released = $submission && $submission->status === 'grades_released';
 
-    // Load student responses (keyed by questionid)
+    // Load student responses (keyed by questionid). Auto-save writes responses before any submission
+    // record exists, so they must be loaded regardless of submission state - otherwise a reload shows
+    // empty boxes and a later submit overwrites the saved answers with blanks.
     $responses = [];
-    if ($submission) {
-        $recs = $DB->get_records('smartworkbook_response', [
-            'workbookid' => $workbook->id,
-            'userid'     => $USER->id,
-        ]);
-        foreach ($recs as $r) {
-            $responses[$r->questionid] = $r->responsetext;
-        }
+    $recs = $DB->get_records('smartworkbook_response', [
+        'workbookid' => $workbook->id,
+        'userid'     => $USER->id,
+    ]);
+    foreach ($recs as $r) {
+        $responses[$r->questionid] = $r->responsetext;
     }
 
     // Load marks — needed when grades released OR re-answer mode (to know which questions are flagged)

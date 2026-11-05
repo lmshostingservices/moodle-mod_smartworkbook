@@ -2050,7 +2050,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 html += '  </div>';
                 html += '  <div class="sw-mark-answer-block"><div class="sw-mark-answer-label">Student answer</div>' + (q.student_answer ? swEscMultiline(q.student_answer) : '<em style="color:#94a3b8">No answer provided</em>') + '</div>';
                 if (q.model_answer) {
-                    html += '  <div class="sw-mark-answer-block sw-mark-answer-block-model"><div class="sw-mark-answer-label sw-mark-answer-label-model">Model answer</div>' + q.model_answer + '</div>';
+                    html += '  <div class="sw-mark-answer-block sw-mark-answer-block-model"><div class="sw-mark-answer-label sw-mark-answer-label-model">Model answer</div>' + String(q.model_answer == null ? '' : q.model_answer).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/\n/g, '<br>') + '</div>';
                 }
                 if (aiMark !== '') {
                     var confBadge = q.ai_confidence ? '<span class="sw-ai-confidence ' + confClass + '">' + swEsc(q.ai_confidence) + '</span>' : '';

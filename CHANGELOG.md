@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.79 (2026-11-05)
+
+- Fix: learners' saved answers disappeared on reload until they submitted — responses now always load.
+- Fix: AI "Generate model answers" returned raw markdown (`**Model answer:**`, `###`, bullets); answers are now cleaned to plain text.
+- Fix: model answers in the Marking Console are HTML-escaped and keep line breaks (previously injected raw HTML).
+- Fix: Marking Console showed "SCORE 0.0 / 0.0" when the submission had no stored totals; it now falls back to live sums.
+
 ## 1.0.78 (2026-10-23)
 
 - Send the LMS Labs grading-check API key in the `X-Api-Key` header instead of the URL.

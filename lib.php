@@ -423,3 +423,27 @@ function smartworkbook_section_badge_html(string $plain_text, string $display_ht
          . '<span class="sw-section-title-text">' . $display_html . '</span>'
          . '</div>';
 }
+
+/**
+ * Turn an AI-written model answer into the plain text the workbook stores and shows.
+ *
+ * The model sometimes answers in markdown ("**Model Answer:** 1. **Hazard**: ..."). Model answers are
+ * edited in a plain textarea and shown to assessors as text, so strip the markup but keep lists and lines.
+ *
+ * @param string $text Raw answer from the AI service.
+ * @return string Plain text answer.
+ */
+function smartworkbook_plain_model_answer(string $text): string {
+    $text = str_replace(["\r\n", "\r"], "\n", $text);
+    // Drop a leading "Model answer:" label in any emphasis style.
+    $text = preg_replace('/^\s*[*_#\s]*model\s+answer\s*[*_]*\s*:?\s*[*_]*\s*/i', '', $text);
+    // Headings, bold/italic markers and inline code ticks.
+    $text = preg_replace('/^\s{0,3}#{1,6}\s*/m', '', $text);
+    $text = preg_replace('/(\*\*|__)(.+?)\1/s', '$2', $text);
+    $text = preg_replace('/(?<![\w*])\*(?!\s)(.+?)(?<!\s)\*(?![\w*])/s', '$1', $text);
+    $text = str_replace('`', '', $text);
+    // Markdown bullets become plain bullets.
+    $text = preg_replace('/^(\s*)[-*+]\s+/m', '$1• ', $text);
+    return trim($text);
+}
+

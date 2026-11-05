@@ -2029,14 +2029,25 @@ switch ($action) {
             ];
         }
 
+        // Fall back to live sums when the submission has no stored totals yet.
+        $summax = 0.0; $sumgot = 0.0;
+        foreach ($result_q as $rq) {
+            if ($rq['qtype'] === 'heading') { continue; }
+            $summax += $rq['marks'];
+            if ($rq['teacher_mark'] !== null) { $sumgot += $rq['teacher_mark']; }
+        }
+        $outmax = (float)($submission->max_marks ?? 0) > 0 ? $submission->max_marks : $summax;
+        $outgot = $submission->total_marks !== null && $submission->total_marks !== '' && (float)$submission->max_marks > 0
+            ? $submission->total_marks : $sumgot;
+
         echo json_encode([
             'success'     => true,
             'student'     => ['id' => (int)$student->id, 'name' => $student->firstname . ' ' . $student->lastname],
             'submission'  => [
                 'id'           => (int)$submission->id,
                 'status'       => $submission->status,
-                'total_marks'  => $submission->total_marks,
-                'max_marks'    => $submission->max_marks,
+                'total_marks'  => $outgot,
+                'max_marks'    => $outmax,
             ],
             'questions'   => $result_q,
         ]);
@@ -2118,7 +2129,7 @@ switch ($action) {
             if (!isset($questions[$qid])) continue;
             $DB->update_record('smartworkbook_question', (object)[
                 'id'           => $qid,
-                'model_answer' => clean_param((string)($ans['model_answer'] ?? ''), PARAM_RAW), // pipeline-ignore: PARAM_RAW — free-form rich text/HTML, escaped or format_text()d on output
+                'model_answer' => smartworkbook_plain_model_answer(clean_param((string)($ans['model_answer'] ?? ''), PARAM_RAW)), // pipeline-ignore: PARAM_RAW — free-form rich text/HTML, escaped or format_text()d on output
             ]);
             $updated++;
         }
