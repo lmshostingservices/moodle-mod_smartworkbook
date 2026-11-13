@@ -1280,6 +1280,11 @@ switch ($action) {
         ]);
 
         $data = json_decode($response, true);
+        // Client Portal (when installed) bills the client: the service's figure, else the published price.
+        if (method_exists('\\local_clientportal\\api', 'record_lmslabs_call')) {
+            \local_clientportal\api::record_lmslabs_call((int)$USER->id, (int)$context->id, 'mod_smartworkbook',
+                $data, 0, 'Workbook conversion');
+        }
 
         if (empty($data['success']) || empty($data['questions']) || !is_array($data['questions'])) {
             $err = (is_array($data) && isset($data['error'])) ? clean_param($data['error'], PARAM_TEXT)
@@ -1806,6 +1811,11 @@ switch ($action) {
         ]);
 
         $data = json_decode($response, true);
+        // Client Portal (when installed) bills the client: the service's figure, else the published price.
+        if (method_exists('\\local_clientportal\\api', 'record_lmslabs_call')) {
+            \local_clientportal\api::record_lmslabs_call((int)$USER->id, (int)$context->id, 'mod_smartworkbook',
+                $data, 5, 'AI marking');
+        }
 
         if (empty($data['success']) || empty($data['marks']) || !is_array($data['marks'])) {
             $err = (is_array($data) && isset($data['error'])) ? clean_param($data['error'], PARAM_TEXT)
@@ -2109,6 +2119,11 @@ switch ($action) {
         ]);
 
         $data = json_decode($response, true);
+        // Client Portal (when installed) bills the client: the service's figure, else the published price.
+        if (method_exists('\\local_clientportal\\api', 'record_lmslabs_call')) {
+            \local_clientportal\api::record_lmslabs_call((int)$USER->id, (int)$context->id, 'mod_smartworkbook',
+                $data, 3, 'Model answers');
+        }
 
         // Only treat as failure when success is explicitly false or missing.
         // Do NOT check empty($data['answers']) — an empty array is valid when all

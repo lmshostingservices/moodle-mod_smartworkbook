@@ -25,8 +25,8 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'mod_smartworkbook';
-$plugin->version   = 2026110500;
+$plugin->version   = 2026111300;
 $plugin->requires  = 2022112800;
 $plugin->maturity  = MATURITY_STABLE;
-$plugin->release   = '1.0.79'; // See CHANGELOG.md for release notes.
+$plugin->release   = '1.0.80'; // See CHANGELOG.md for release notes.
 $plugin->supported = [401, 500];
