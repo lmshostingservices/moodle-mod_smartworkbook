@@ -266,6 +266,29 @@ function smartworkbook_fuzzy_match(string $key, array &$api_map): ?array {
 }
 
 /**
+ * Remove an API question from every key of the multi-map once it has been placed.
+ *
+ * Each question is filed under its question text and, when different, its label, so taking it under one key
+ * must also drop it from the other, or it is placed a second time (by a later block or the safety net).
+ *
+ * @param array &$apimap Multi-map: normalised_text => [API question, ...]
+ * @param array $q The placed question (carries its position in '__swidx')
+ */
+function smartworkbook_consume(array &$apimap, array $q): void {
+    if (!isset($q['__swidx'])) {
+        return;
+    }
+    foreach ($apimap as $akey => $qs) {
+        $apimap[$akey] = array_values(array_filter($qs, function ($other) use ($q) {
+            return ($other['__swidx'] ?? null) !== $q['__swidx'];
+        }));
+        if (empty($apimap[$akey])) {
+            unset($apimap[$akey]);
+        }
+    }
+}
+
+/**
  * Extract embedded images from a single table cell.
  * Handles both DrawingML (a:blip) and VML (v:imagedata).
  *
@@ -1308,7 +1331,12 @@ switch ($action) {
 
         if ($docx_blocks !== null) {
             $api_map = [];
-            foreach ($data['questions'] as $q) {
+            foreach ($data['questions'] as $qidx => $q) {
+                if (!is_array($q)) {
+                    continue;
+                }
+                $q['__swidx'] = $qidx;
+                $data['questions'][$qidx] = $q;
                 $key = smartworkbook_norm($q['questiontext'] ?? '');
                 if ($key !== '') {
                     $api_map[$key][] = $q;
@@ -1362,6 +1390,7 @@ switch ($action) {
                                     unset($api_map[$mk]);
                                 }
                                 unset($found_keys[$mk]);
+                                smartworkbook_consume($api_map, $mq);
                                 $DB->insert_record('smartworkbook_question', (object)[
                                     'workbookid'   => $workbook->id,
                                     'sortorder'    => $i++,
@@ -1521,6 +1550,9 @@ switch ($action) {
                 } else {
                     $matched_q = smartworkbook_fuzzy_match($key, $api_map);
                 }
+                if ($matched_q !== null) {
+                    smartworkbook_consume($api_map, $matched_q);
+                }
 
                 if ($matched_q !== null) {
                     $rec = (object)[
@@ -1552,21 +1584,27 @@ switch ($action) {
                 $DB->insert_record('smartworkbook_question', $rec);
             }
 
-            // Safety net: append any API questions not matched by a DOCX block
-            foreach ($api_map as $remaining_qs) {
-                foreach ($remaining_qs as $q) {
-                    $DB->insert_record('smartworkbook_question', (object)[
-                        'workbookid'   => $workbook->id,
-                        'sortorder'    => $i++,
-                        'qtype'        => $q['qtype'] ?? 'text',
-                        'label'        => $q['label'] ?? '',
-                        'questiontext' => $q['questiontext'] ?? '',
-                        'marks'        => (float)($q['marks'] ?? 1),
-                        'model_answer' => $q['model_answer'] ?? '',
-                        'rubric_notes' => $q['rubric_notes'] ?? '',
-                        'timecreated'  => time(),
-                    ]);
+            // Safety net: append any API questions not matched by a DOCX block, once each and in
+            // document order (a question can still sit under both its text and its label).
+            $remaining = [];
+            foreach ($api_map as $remainingqs) {
+                foreach ($remainingqs as $q) {
+                    $remaining[$q['__swidx'] ?? count($remaining) + 1000000] = $q;
                 }
+            }
+            ksort($remaining);
+            foreach ($remaining as $q) {
+                $DB->insert_record('smartworkbook_question', (object)[
+                    'workbookid'   => $workbook->id,
+                    'sortorder'    => $i++,
+                    'qtype'        => $q['qtype'] ?? 'text',
+                    'label'        => $q['label'] ?? '',
+                    'questiontext' => $q['questiontext'] ?? '',
+                    'marks'        => (float)($q['marks'] ?? 1),
+                    'model_answer' => $q['model_answer'] ?? '',
+                    'rubric_notes' => $q['rubric_notes'] ?? '',
+                    'timecreated'  => time(),
+                ]);
             }
 
         } else {
