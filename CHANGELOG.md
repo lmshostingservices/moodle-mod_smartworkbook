@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.1 (2026-11-26)
+
+### Fixed
+- Converting a Word workbook added some questions twice. Each AI question is filed under both its text and its label so the plugin can find it in the document; placing it under one left it under the other, and it was added again at the end. A placed question is now removed under both, and any left over are added once, in document order.
+
 ## 1.1.0 (2026-11-26)
 
 ### Added
