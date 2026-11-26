@@ -80,6 +80,12 @@ class provider implements
             'responsetext' => 'privacy:metadata:aigrader:responsetext',
         ], 'privacy:metadata:aigrader');
 
+        // Bring your own AI: the same data goes to the AI service the site chose instead.
+        $collection->add_external_location_link('byok_aiprovider', [
+            'responsetext' => 'privacy:metadata:byok_aiprovider:responsetext',
+            'workbook' => 'privacy:metadata:byok_aiprovider:workbook',
+        ], 'privacy:metadata:byok_aiprovider');
+
         return $collection;
     }
 

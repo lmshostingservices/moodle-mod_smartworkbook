@@ -38,6 +38,11 @@ require_login($course, true, $cm);
 $context = context_module::instance($cm->id);
 require_capability('mod/smartworkbook:manage', $context);
 
+// Bring your own AI: conversion of Word files, marking and model answers use the site's own AI (no credits).
+$swownai = \mod_smartworkbook\byok::active();
+$swownaibadge = '<span class="sw-ownai-badge"><i class="fa fa-key" aria-hidden="true"></i> '
+    . get_string('byok_badge', 'smartworkbook') . '</span>';
+
 // ── Platform manual-grading availability check ──────────────────────────────
 // Asks the AI Grader platform whether manual grading is permitted for this
 // client/course/activity. Defaults to true (allowed) on any error or timeout.
@@ -188,7 +193,7 @@ echo $OUTPUT->header();
                     <div class="sw-howto-step-num">2</div>
                     <div class="sw-howto-step-content">
                         <div class="sw-howto-step-title">Generate model answers (optional)</div>
-                        <div class="sw-howto-step-desc">Click <strong>Generate Model Answers</strong> to have AI write polished answers for every question. Costs <strong>3 credits</strong>. Review and edit them — these are what the marking engine compares student answers against.</div>
+                        <div class="sw-howto-step-desc">Click <strong>Generate Model Answers</strong> to have AI write polished answers for every question. <?php echo $swownai ? get_string('byok_howtoanswers', 'smartworkbook') : 'Costs <strong>3 credits</strong>.'; ?> Review and edit them — these are what the marking engine compares student answers against.</div>
                     </div>
                 </div>
 
@@ -228,7 +233,7 @@ echo $OUTPUT->header();
                     <div class="sw-howto-step-num">7</div>
                     <div class="sw-howto-step-content">
                         <div class="sw-howto-step-title">AI mark &amp; release</div>
-                        <div class="sw-howto-step-desc">Click <strong>AI Mark All Submitted</strong> (costs <strong>5 credits</strong> per student). Review each AI suggestion — tick, adjust or override — then click <strong>Release Feedback</strong>. Marks go straight to the Moodle gradebook.</div>
+                        <div class="sw-howto-step-desc">Click <strong>AI Mark All Submitted</strong> (<?php echo $swownai ? get_string('byok_howtomark', 'smartworkbook') : 'costs <strong>5 credits</strong> per student'; ?>). Review each AI suggestion — tick, adjust or override — then click <strong>Release Feedback</strong>. Marks go straight to the Moodle gradebook.</div>
                     </div>
                 </div>
 
@@ -257,7 +262,7 @@ echo $OUTPUT->header();
                 </svg>
                 Upload &amp; Convert Workbook
             </div>
-            <div class="sw-upload-card-meta">Upload your teacher version (.docx or .pdf) with model answers — AI extracts all questions, headings &amp; instructions automatically &nbsp;&middot;&nbsp; <strong>Max&nbsp;40&nbsp;MB</strong> &nbsp;&middot;&nbsp; 15 credits per conversion</div>
+            <div class="sw-upload-card-meta">Upload your teacher version (.docx or .pdf) with model answers — AI extracts all questions, headings &amp; instructions automatically &nbsp;&middot;&nbsp; <strong>Max&nbsp;40&nbsp;MB</strong> &nbsp;&middot;&nbsp; <?php echo $swownai ? $swownaibadge . ' ' . get_string('byok_uploadmeta', 'smartworkbook') : '15 credits per conversion'; ?></div>
         </div>
 
         <label class="sw-drop-zone" id="sw-drop-zone" for="sw-file-input">
@@ -729,7 +734,7 @@ echo $OUTPUT->header();
             <?php if (!$effective_manual_grading): ?>
             <button class="btn btn-primary btn-sm sw-ai-mark-all-btn" id="sw-ai-mark-all-btn">
                 AI Mark All Submitted
-                <small style="display:block;font-size:0.72rem;font-weight:400;opacity:0.85;">(5 credits each)</small>
+                <small style="display:block;font-size:0.72rem;font-weight:400;opacity:0.85;"><?php echo $swownai ? s(get_string('byok_eachownai', 'smartworkbook')) : '(5 credits each)'; ?></small>
             </button>
             <?php else: ?>
             <span class="sw-manual-mode-badge">
@@ -1055,6 +1060,14 @@ document.addEventListener('DOMContentLoaded', function () {
     var AJAX_URL      = '<?php echo (new moodle_url('/mod/smartworkbook/ajax.php'))->out(false); ?>';
     var MANUAL_GRADING = <?php echo $effective_manual_grading ? 'true' : 'false'; ?>;
     var PLATFORM_MG_ALLOWED = <?php echo $platform_mg_allowed ? 'true' : 'false'; ?>;
+    var OWN_AI        = <?php echo $swownai ? 'true' : 'false'; ?>;
+    var OWN_AI_STR    = <?php echo json_encode([
+        'convert' => get_string('byok_confirmconvert', 'smartworkbook'),
+        'answers' => get_string('byok_confirmanswers', 'smartworkbook'),
+        'mark' => get_string('byok_confirmmark', 'smartworkbook'),
+        'markall' => get_string('byok_confirmmarkall', 'smartworkbook'),
+        'each' => get_string('byok_eachownai', 'smartworkbook'),
+    ]); ?>;
 
     // HTML-escape untrusted values (student input, names, AI/API text) before
     // inserting into innerHTML or attribute strings.
@@ -1269,7 +1282,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 alert('<?php echo addslashes(get_string("error_filetype", "smartworkbook")); ?>');
                 return;
             }
-            if (!confirm('This will use 15 credits to convert your workbook with AI. Continue?')) return;
+            if (!confirm(OWN_AI && ext === 'docx' ? OWN_AI_STR.convert
+                : 'This will use 15 credits to convert your workbook with AI. Continue?')) return;
 
             convertBtn.disabled = true;
             convertBtn.innerHTML = '<span class="sw-spinner"></span> Converting...';
@@ -1325,7 +1339,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var genBtn = document.getElementById('sw-gen-answers-btn');
     if (genBtn) {
         genBtn.addEventListener('click', function () {
-            if (!confirm('Generate model answers for all questions? This uses 3 credits.')) return;
+            if (!confirm(OWN_AI ? OWN_AI_STR.answers : 'Generate model answers for all questions? This uses 3 credits.')) return;
             genBtn.disabled = true;
             genBtn.innerHTML = '<span class="sw-spinner sw-spinner-dark"></span> Generating...';
             ajax({action:'generate_model_answers', cmid:CMID}, function (data) {
@@ -1944,14 +1958,16 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (!data.success) return;
                 var submitted = data.submissions.filter(function (s){ return s.status === 'submitted'; });
                 if (submitted.length === 0) { alert('No submitted workbooks to mark.'); return; }
-                if (!confirm('AI mark ' + submitted.length + ' submissions? This uses ' + (submitted.length * 5) + ' credits.')) return;
+                if (!confirm(OWN_AI ? OWN_AI_STR.markall.replace('{$a}', submitted.length)
+                    : 'AI mark ' + submitted.length + ' submissions? This uses ' + (submitted.length * 5) + ' credits.')) return;
                 aiMarkAllBtn.disabled = true;
                 aiMarkAllBtn.innerHTML = '<span class="sw-spinner"></span> Marking...';
                 var done = 0;
                 function markNext(i) {
                     if (i >= submitted.length) {
                         aiMarkAllBtn.disabled = false;
-                        aiMarkAllBtn.innerHTML = 'AI Mark All Submitted<small style="display:block;font-size:0.7rem;font-weight:normal;">(5 credits each)</small>';
+                        aiMarkAllBtn.innerHTML = 'AI Mark All Submitted<small style="display:block;font-size:0.7rem;font-weight:normal;">'
+                            + (OWN_AI ? swEsc(OWN_AI_STR.each) : '(5 credits each)') + '</small>';
                         loadSubmissions();
                         return;
                     }
@@ -1968,7 +1984,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // ---- AI mark one ----
     function aiMarkOne(sid, btn) {
-        if (!confirm('AI mark this submission? This uses 5 credits.')) return;
+        if (!confirm(OWN_AI ? OWN_AI_STR.mark : 'AI mark this submission? This uses 5 credits.')) return;
         var orig = btn.innerHTML;
         btn.disabled = true;
         btn.innerHTML = '<span class="sw-spinner"></span>';
@@ -2127,7 +2143,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (aiMarkConsBtn) {
         aiMarkConsBtn.addEventListener('click', function () {
             if (!currentSid) return;
-            if (!confirm('AI mark this submission? 5 credits will be deducted.')) return;
+            if (!confirm(OWN_AI ? OWN_AI_STR.mark : 'AI mark this submission? 5 credits will be deducted.')) return;
             aiMarkConsBtn.disabled = true;
             aiMarkConsBtn.innerHTML = '<span class="sw-spinner sw-spinner-dark"></span> Marking...';
             ajax({action:'ai_mark', cmid:CMID, submissionid:currentSid}, function (data) {

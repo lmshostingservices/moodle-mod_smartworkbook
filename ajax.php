@@ -1257,31 +1257,35 @@ switch ($action) {
             break;
         }
 
+        // Bring your own AI: Word workbooks are read and converted here with the site's own AI.
+        $ownai = \mod_smartworkbook\byok::handles('convert', $filename);
         list($site_id, $api_key) = smartworkbook_get_api_credentials();
-        if (empty($site_id) || empty($api_key)) {
-            echo json_encode(['success' => false, 'error' => get_string('error_nocredentials', 'smartworkbook')]);
+        if (!$ownai && (empty($site_id) || empty($api_key))) {
+            $nokey = \mod_smartworkbook\byok::active() ? 'byok_pdfcredits' : 'error_nocredentials';
+            echo json_encode(['success' => false, 'error' => get_string($nokey, 'smartworkbook')]);
             break;
         }
 
-        $curl = new \curl();
-        $curl->setopt(['CURLOPT_TIMEOUT' => 120]);
-
-        $payload = json_encode([
+        $request = [
             'site_id'                  => $site_id,
             'api_key'                  => $api_key,
             'filename'                 => $filename,
             'filecontent'              => $filecontent,
             'extract_instructions'     => true,
             'include_metadata_fields'  => true,
-        ]);
-
-        $response = $curl->post('https://lms-labs.com/api/smartworkbook/convert', $payload, [
-            'CURLOPT_HTTPHEADER' => ['Content-Type: application/json'],
-        ]);
-
-        $data = json_decode($response, true);
+        ];
+        if ($ownai) {
+            $data = \mod_smartworkbook\byok::run('convert', $request);
+        } else {
+            $curl = new \curl();
+            $curl->setopt(['CURLOPT_TIMEOUT' => 120]);
+            $response = $curl->post('https://lms-labs.com/api/smartworkbook/convert', json_encode($request), [
+                'CURLOPT_HTTPHEADER' => ['Content-Type: application/json'],
+            ]);
+            $data = json_decode($response, true);
+        }
         // Client Portal (when installed) bills the client: the service's figure, else the published price.
-        if (method_exists('\\local_clientportal\\api', 'record_lmslabs_call')) {
+        if (!$ownai && method_exists('\\local_clientportal\\api', 'record_lmslabs_call')) {
             \local_clientportal\api::record_lmslabs_call((int)$USER->id, (int)$context->id, 'mod_smartworkbook',
                 $data, 0, 'Workbook conversion');
         }
@@ -1770,8 +1774,10 @@ switch ($action) {
             break;
         }
 
+        // Bring your own AI: marking runs here with the site's own AI.
+        $ownai = \mod_smartworkbook\byok::handles('mark');
         list($site_id, $api_key) = smartworkbook_get_api_credentials();
-        if (empty($site_id) || empty($api_key)) {
+        if (!$ownai && (empty($site_id) || empty($api_key))) {
             echo json_encode(['success' => false, 'error' => get_string('error_nocredentials', 'smartworkbook')]);
             break;
         }
@@ -1797,22 +1803,23 @@ switch ($action) {
             ];
         }
 
-        $curl = new \curl();
-        $curl->setopt(['CURLOPT_TIMEOUT' => 120]);
-
-        $payload = json_encode([
+        $request = [
             'site_id'   => $site_id,
             'api_key'   => $api_key,
             'qa_pairs'  => $qa_pairs,
-        ]);
-
-        $response = $curl->post('https://lms-labs.com/api/smartworkbook/mark-submission', $payload, [
-            'CURLOPT_HTTPHEADER' => ['Content-Type: application/json'],
-        ]);
-
-        $data = json_decode($response, true);
+        ];
+        if ($ownai) {
+            $data = \mod_smartworkbook\byok::run('mark', $request);
+        } else {
+            $curl = new \curl();
+            $curl->setopt(['CURLOPT_TIMEOUT' => 120]);
+            $response = $curl->post('https://lms-labs.com/api/smartworkbook/mark-submission', json_encode($request), [
+                'CURLOPT_HTTPHEADER' => ['Content-Type: application/json'],
+            ]);
+            $data = json_decode($response, true);
+        }
         // Client Portal (when installed) bills the client: the service's figure, else the published price.
-        if (method_exists('\\local_clientportal\\api', 'record_lmslabs_call')) {
+        if (!$ownai && method_exists('\\local_clientportal\\api', 'record_lmslabs_call')) {
             \local_clientportal\api::record_lmslabs_call((int)$USER->id, (int)$context->id, 'mod_smartworkbook',
                 $data, 5, 'AI marking');
         }
@@ -2077,8 +2084,10 @@ switch ($action) {
         $workbook  = $DB->get_record('smartworkbook', ['id' => $cm->instance], '*', MUST_EXIST);
         $questions = $DB->get_records('smartworkbook_question', ['workbookid' => $workbook->id], 'sortorder ASC');
 
+        // Bring your own AI: model answers are written here with the site's own AI.
+        $ownai = \mod_smartworkbook\byok::handles('answers');
         list($site_id, $api_key) = smartworkbook_get_api_credentials();
-        if (empty($site_id) || empty($api_key)) {
+        if (!$ownai && (empty($site_id) || empty($api_key))) {
             echo json_encode(['success' => false, 'error' => get_string('error_nocredentials', 'smartworkbook')]);
             break;
         }
@@ -2105,22 +2114,22 @@ switch ($action) {
             break;
         }
 
-        $curl = new \curl();
-        $curl->setopt(['CURLOPT_TIMEOUT' => 120]);
-
-        $payload = json_encode([
+        $request = [
             'site_id'   => $site_id,
             'api_key'   => $api_key,
             'questions' => $q_list,
-        ]);
-
-        $response = $curl->post('https://lms-labs.com/api/smartworkbook/generate-model-answers', $payload, [
-            'CURLOPT_HTTPHEADER' => ['Content-Type: application/json'],
-        ]);
-
-        $data = json_decode($response, true);
+        ];
+        if ($ownai) {
+            $data = \mod_smartworkbook\byok::run('answers', $request);
+        } else {
+            $curl = new \curl();
+            $curl->setopt(['CURLOPT_TIMEOUT' => 120]);
+            $response = $curl->post('https://lms-labs.com/api/smartworkbook/generate-model-answers',
+                json_encode($request), ['CURLOPT_HTTPHEADER' => ['Content-Type: application/json']]);
+            $data = json_decode($response, true);
+        }
         // Client Portal (when installed) bills the client: the service's figure, else the published price.
-        if (method_exists('\\local_clientportal\\api', 'record_lmslabs_call')) {
+        if (!$ownai && method_exists('\\local_clientportal\\api', 'record_lmslabs_call')) {
             \local_clientportal\api::record_lmslabs_call((int)$USER->id, (int)$context->id, 'mod_smartworkbook',
                 $data, 3, 'Model answers');
         }

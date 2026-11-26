@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.0 (2026-11-26)
+
+### Added
+- Bring your own AI. With a Bring your own AI licence in AI Grader Central Config and its Text service set to Moodle AI or the site's own key, Word workbook conversion, AI marking and model answers run on the site's own AI with no LMS Labs credits. The service's Word reading, instructions and checks were ported and compared with the service case by case. PDF workbooks still use LMS Labs credits.
+- "Your own AI" badge on the upload card, and confirmation messages that say no credits are used.
+- Privacy: the site's own AI service is declared as an external location.
+
 ## 1.0.81 (2026-11-24)
 
 - Added a test data generator, so the activity can be created by Moodle's automated tests and by demo and course-building tools. Tests cover creating, listing, deleting, backing up and restoring the activity.
