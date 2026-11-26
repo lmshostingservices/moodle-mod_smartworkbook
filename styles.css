@@ -4050,3 +4050,24 @@
     text-overflow: ellipsis;
     font-weight: 500;
 }
+
+/* Bring your own AI: "Your own AI" badge (MDS info badge, premium finish). */
+.sw-ownai-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 10px;
+    border: 1px solid var(--mds-border-feedback-primary, rgba(15, 108, 191, 0.35));
+    border-radius: 999px;
+    background: var(--mds-bg-feedback-primary-light, #e7f0f9);
+    color: var(--mds-text-feedback-primary, #0a4c86);
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.5;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+.sw-ownai-badge .fa {
+    font-size: 0.75rem;
+}
